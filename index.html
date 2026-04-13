@@ -3,94 +3,410 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- PWA Meta -->
   <title>Sustainability ROI Calculator</title>
   <meta name="description" content="Calculate the financial return, payback period, and carbon impact of your sustainability investments." />
   <meta name="theme-color" content="#1a5c35" />
-  <link rel="manifest" href="/manifest.json" />
-
-  <!-- Apple / iOS PWA support -->
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="SustainROI" />
-  <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-
-  <!-- Windows / MS Tile -->
-  <meta name="msapplication-TileColor" content="#1a5c35" />
-  <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
-
-  <!-- Open Graph (for sharing) -->
-  <meta property="og:title" content="Sustainability ROI Calculator" />
-  <meta property="og:description" content="Build your sustainability business case. Calculate ROI, NPV, payback period, and carbon impact." />
-  <meta property="og:type" content="website" />
-  <meta property="og:image" content="/screenshots/desktop.png" />
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
-
-  <!-- Fonts preload -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
+  <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; }
-    body { background: #f0faf4; }
-    /* Splash screen while app loads */
+    html, body, #root { min-height: 100%; }
+    body { background: #f0faf4; font-family: 'Bitter', Georgia, serif; }
+    input[type=range] { -webkit-appearance: none; appearance: none; }
+    select { appearance: none; -webkit-appearance: none; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    .fade-up { animation: fadeUp 0.45s ease forwards; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #e8f5ee; }
+    ::-webkit-scrollbar-thumb { background: #6aab7f; border-radius: 99px; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+    }
     #splash {
-      position: fixed; inset: 0; background: linear-gradient(135deg, #0f3d22, #2d7a4f);
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #0f3d22, #2d7a4f);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      z-index: 9999; transition: opacity 0.4s ease;
+      z-index: 9999; transition: opacity 0.5s ease;
     }
     #splash.hidden { opacity: 0; pointer-events: none; }
-    #splash h1 { color: #fff; font-family: Georgia, serif; font-size: 1.6rem; margin-top: 1rem; }
-    #splash p { color: #a8dbb8; font-family: sans-serif; font-size: 0.85rem; margin-top: 0.4rem; }
+    #splash h1 { color: #fff; font-family: 'Bitter', Georgia, serif; font-size: 1.6rem; margin-top: 1rem; }
+    #splash p { color: #a8dbb8; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; margin-top: 0.4rem; }
     .leaf { font-size: 3rem; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
   </style>
 </head>
 <body>
-  <!-- Splash screen -->
   <div id="splash">
     <div class="leaf">🌿</div>
     <h1>Sustainability ROI</h1>
     <p>Loading calculator...</p>
   </div>
-
-  <!-- React app root -->
   <div id="root"></div>
 
-  <!-- React + Babel (for direct use; swap for Vite/CRA build in production) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Load the app component -->
-  <script type="text/babel" data-type="module" src="/SustainabilityROI.jsx"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 
   <script>
-    // Hide splash once React mounts
-    window.__hideSplash = function () {
-      const splash = document.getElementById("splash");
-      if (splash) splash.classList.add("hidden");
-    };
+  (function() {
+    var h = React.createElement;
+    var useState = React.useState;
+    var useMemo = React.useMemo;
 
-    // Register Service Worker
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/service-worker.js")
-          .then((reg) => console.log("[PWA] Service Worker registered:", reg.scope))
-          .catch((err) => console.warn("[PWA] SW registration failed:", err));
-      });
+    var INVESTMENT_TYPES = [
+      { label: "Solar Panel Installation", co2Rate: 0.8, life: 25, abatement: 50 },
+      { label: "Energy Efficiency Retrofit", co2Rate: 0.5, life: 20, abatement: 40 },
+      { label: "EV Fleet Transition", co2Rate: 0.6, life: 10, abatement: 45 },
+      { label: "Waste Reduction Program", co2Rate: 0.3, life: 15, abatement: 30 },
+      { label: "Green Building Certification", co2Rate: 0.4, life: 30, abatement: 35 },
+      { label: "Water Recycling System", co2Rate: 0.2, life: 20, abatement: 25 }
+    ];
+    var CURRENCIES = [
+      { label: "EUR (\u20ac)", symbol: "\u20ac" },
+      { label: "USD ($)", symbol: "$" },
+      { label: "GBP (\u00a3)", symbol: "\u00a3" },
+      { label: "SEK (kr)", symbol: "kr" }
+    ];
+    var WACCS = [4, 6, 8, 10, 12];
+    var HORIZONS = [5, 10, 15, 20, 25];
+    var CARBON_ESC = 0.05;
+    var BASE_CARBON = 50;
+
+    function fmt(val, sym) {
+      sym = sym || "\u20ac";
+      var abs = Math.abs(val);
+      var sign = val < 0 ? "-" : "";
+      if (abs >= 1000000) return sign + sym + (abs / 1000000).toFixed(2) + "M";
+      if (abs >= 1000) return sign + sym + Math.round(abs).toLocaleString();
+      return sign + sym + Math.round(abs);
     }
 
-    // Hide splash after short delay (fallback)
-    setTimeout(() => {
-      const splash = document.getElementById("splash");
-      if (splash) splash.classList.add("hidden");
-    }, 1800);
+    function SliderInput(props) {
+      var pct = ((props.value - props.min) / (props.max - props.min)) * 100;
+      var color = props.color || "#2d7a4f";
+      return h("div", { style: { marginBottom: "1.4rem" } },
+        h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" } },
+          h("span", { style: { fontSize: "0.78rem", fontWeight: 700, color: "#1a3d2b", letterSpacing: "0.04em", textTransform: "uppercase" } },
+            props.label,
+            props.info && h("span", { title: props.info, style: { marginLeft: 5, cursor: "help", color: "#6aab7f" } }, " \u24d8")
+          ),
+          h("span", { style: { fontSize: "0.9rem", fontWeight: 700, color: color } }, fmt(props.value, props.sym))
+        ),
+        h("div", { style: { position: "relative", height: 6, background: "#d4e9dc", borderRadius: 99 } },
+          h("div", { style: { position: "absolute", left: 0, width: pct + "%", height: "100%", background: "linear-gradient(90deg, #6aab7f," + color + ")", borderRadius: 99 } }),
+          h("input", { type: "range", min: props.min, max: props.max, step: props.step, value: props.value,
+            onChange: function(e) { props.onChange(Number(e.target.value)); },
+            style: { position: "absolute", inset: 0, opacity: 0, width: "100%", cursor: "pointer", height: "100%", margin: 0 }
+          }),
+          h("div", { style: { position: "absolute", left: "calc(" + pct + "% - 9px)", top: "50%", transform: "translateY(-50%)", width: 18, height: 18, borderRadius: "50%", background: "#fff", border: "2.5px solid " + color, boxShadow: "0 1px 6px rgba(0,0,0,0.15)", pointerEvents: "none" } })
+        )
+      );
+    }
+
+    function KPI(props) {
+      var bg = props.accent ? "linear-gradient(135deg,#1a5c35,#2d7a4f)" : props.warn ? "linear-gradient(135deg,#3d1515,#6b2020)" : "#fff";
+      var tc = (props.accent || props.warn) ? "#fff" : "#1a3d2b";
+      var lc = props.accent ? "#a8dbb8" : props.warn ? "#ffb3b3" : "#6aab7f";
+      var sc = props.accent ? "#c8f0d4" : props.warn ? "#ffcccc" : "#7aaa8c";
+      return h("div", { style: { background: bg, border: (props.accent || props.warn) ? "none" : "1.5px solid #d4e9dc", borderRadius: 16, padding: "1.1rem 1.3rem", flex: 1, minWidth: 130 } },
+        h("div", { style: { fontSize: "0.68rem", fontWeight: 700, color: lc, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 } }, props.label),
+        h("div", { style: { fontSize: props.big ? "1.7rem" : "1.35rem", fontWeight: 800, color: tc, lineHeight: 1 } }, props.value),
+        props.sub && h("div", { style: { fontSize: "0.72rem", color: sc, marginTop: 4 } }, props.sub)
+      );
+    }
+
+    function Chart(props) {
+      var data = props.data, sym = props.sym, inaction = props.inaction;
+      var W = 580, H = 210, PL = 68, PT = 16, PR = 20, PB = 40;
+      var iW = W - PL - PR, iH = H - PT - PB;
+      var allV = data.map(function(d){return d.c;}).concat((inaction||[]).map(function(d){return d.c;}));
+      var yMin = Math.min.apply(null, [0].concat(allV));
+      var yMax = Math.max.apply(null, [0].concat(allV));
+      var yR = yMax - yMin || 1;
+      var xs = function(i){ return PL + (i/(data.length-1))*iW; };
+      var ys = function(v){ return PT + iH - ((v-yMin)/yR)*iH; };
+      var z = ys(0);
+      var line = data.map(function(d,i){return (i===0?"M":"L")+xs(i)+","+ys(d.c);}).join(" ");
+      var pos = data.map(function(d,i){return (i===0?"M":"L")+xs(i)+","+Math.min(ys(d.c),z);}).join(" ")+" L"+xs(data.length-1)+","+z+" L"+xs(0)+","+z+" Z";
+      var neg = data.map(function(d,i){return (i===0?"M":"L")+xs(i)+","+Math.max(ys(d.c),z);}).join(" ")+" L"+xs(data.length-1)+","+z+" L"+xs(0)+","+z+" Z";
+      var inLine = inaction ? inaction.map(function(d,i){return (i===0?"M":"L")+xs(i)+","+ys(d.c);}).join(" ") : null;
+      var ticks = Array.from({length:5},function(_,i){return yMin+(yR/4)*i;});
+      var beMarkers = data.map(function(d,i){
+        if(i>0 && data[i-1].c<0 && d.c>=0){
+          return h("g",{key:"be"+i},
+            h("line",{x1:xs(i),x2:xs(i),y1:PT,y2:H-PB,stroke:"#f4c430",strokeWidth:"1.5",strokeDasharray:"3,3"}),
+            h("text",{x:xs(i)+4,y:PT+14,fontSize:"9",fill:"#c89a10",fontWeight:"700"},"BREAKEVEN")
+          );
+        }
+        return null;
+      });
+      return h("div",{style:{overflowX:"auto"}},
+        h("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",maxWidth:W}},
+          h("defs",null,
+            h("linearGradient",{id:"pg",x1:"0",y1:"0",x2:"0",y2:"1"},
+              h("stop",{offset:"0%",stopColor:"#2d7a4f",stopOpacity:"0.3"}),
+              h("stop",{offset:"100%",stopColor:"#2d7a4f",stopOpacity:"0.02"})
+            ),
+            h("linearGradient",{id:"ng",x1:"0",y1:"0",x2:"0",y2:"1"},
+              h("stop",{offset:"0%",stopColor:"#e05252",stopOpacity:"0.04"}),
+              h("stop",{offset:"100%",stopColor:"#e05252",stopOpacity:"0.22"})
+            )
+          ),
+          ticks.map(function(v,i){
+            return h("g",{key:"t"+i},
+              h("line",{x1:PL,x2:W-PR,y1:ys(v),y2:ys(v),stroke:"#e8f3ec",strokeWidth:"1"}),
+              h("text",{x:PL-8,y:ys(v)+4,textAnchor:"end",fontSize:"10",fill:"#8aab97"},fmt(v,sym))
+            );
+          }),
+          h("line",{x1:PL,x2:W-PR,y1:z,y2:z,stroke:"#2d7a4f",strokeWidth:"1.5",strokeDasharray:"4,3"}),
+          h("path",{d:pos,fill:"url(#pg)"}),
+          h("path",{d:neg,fill:"url(#ng)"}),
+          inLine && h("path",{d:inLine,fill:"none",stroke:"#c0392b",strokeWidth:"2",strokeDasharray:"6,3",strokeLinecap:"round"}),
+          h("path",{d:line,fill:"none",stroke:"#2d7a4f",strokeWidth:"2.5",strokeLinecap:"round",strokeLinejoin:"round"}),
+          beMarkers,
+          data.filter(function(_,i){return i%2===0;}).map(function(d){
+            return h("text",{key:"x"+d.year,x:xs(data.indexOf(d)),y:H-8,textAnchor:"middle",fontSize:"10",fill:"#8aab97"},"Yr "+d.year);
+          }),
+          h("g",{transform:"translate("+PL+","+(H-6)+")"},
+            h("line",{x1:"0",x2:"16",y1:"0",y2:"0",stroke:"#2d7a4f",strokeWidth:"2.5"}),
+            h("text",{x:"20",y:"4",fontSize:"9",fill:"#4a7a5a"},"ROI with investment"),
+            inLine && h("line",{x1:"130",x2:"146",y1:"0",y2:"0",stroke:"#c0392b",strokeWidth:"2",strokeDasharray:"4,2"}),
+            inLine && h("text",{x:"150",y:"4",fontSize:"9",fill:"#c0392b"},"Cost of inaction")
+          )
+        )
+      );
+    }
+
+    function App() {
+      var s = useState, u = useMemo;
+      var invType = s(0), cost = s(1000000), savings = s(80000), riskAvoid = s(12500);
+      var revGrowth = s(20000), finBonus = s(25000), wacc = s(8), horizon = s(10);
+      var currency = s(0), tab = s("inputs"), showInaction = s(false);
+
+      var sym = CURRENCIES[currency[0]].symbol;
+      var it = INVESTMENT_TYPES[invType[0]];
+      var benefit = savings[0] + riskAvoid[0] + revGrowth[0] + finBonus[0];
+
+      var yearly = u(function(){
+        var cum = -cost[0];
+        return Array.from({length: horizon[0]+1}, function(_,yr){
+          if(yr===0) return {year:0,b:0,db:0,c:-cost[0]};
+          var b = benefit * Math.pow(1.03,yr-1);
+          var db = b / Math.pow(1+wacc[0]/100,yr);
+          cum += db;
+          return {year:yr,b:b,db:db,c:cum};
+        });
+      }, [cost[0],benefit,wacc[0],horizon[0]]);
+
+      var inaction = u(function(){
+        var co2s = (cost[0]*it.co2Rate)/1000;
+        var cum = 0;
+        return Array.from({length:horizon[0]+1},function(_,yr){
+          if(yr===0) return {year:0,c:0};
+          var lb = benefit*Math.pow(1.03,yr-1);
+          var cp = co2s*BASE_CARBON*Math.pow(1+CARBON_ESC,yr-1);
+          cum -= (lb+cp)/Math.pow(1+wacc[0]/100,yr);
+          return {year:yr,c:cum};
+        });
+      }, [benefit,horizon[0],wacc[0],cost[0],it]);
+
+      var npv = yearly[yearly.length-1].c;
+      var basicROI = ((benefit*horizon[0]-cost[0])/cost[0])*100;
+      var enhROI = (npv/cost[0])*100;
+      var payback = u(function(){
+        for(var i=1;i<yearly.length;i++){
+          if(yearly[i].c>=0) return i-1+(-yearly[i-1].c)/(yearly[i].c-yearly[i-1].c);
+        }
+        return null;
+      },[yearly]);
+      var co2s = (cost[0]*it.co2Rate)/1000;
+      var ctSave = co2s*it.abatement;
+      var totalLoss = Math.abs(inaction[inaction.length-1].c);
+
+      function sel(val,setFn,opts,sfx){
+        return h("div",{style:{position:"relative"}},
+          h("select",{value:val,onChange:function(e){setFn(Number(e.target.value));},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+            opts.map(function(o){return h("option",{key:o,value:o},o+(sfx||""));})),
+          h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"\u25be")
+        );
+      }
+
+      function tabBtn(t,label){
+        return h("button",{key:t,onClick:function(){tab[1](t);},style:{padding:"0.55rem 1.2rem",borderRadius:99,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.78rem",transition:"all 0.2s",background:tab[0]===t?"#1a5c35":"transparent",color:tab[0]===t?"#fff":"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},label);
+      }
+
+      return h("div",{style:{minHeight:"100vh",background:"linear-gradient(160deg,#f0faf4 0%,#e8f5ee 40%,#f5fdf7 100%)",fontFamily:"'Bitter',Georgia,serif",color:"#1a3d2b"}},
+
+        // HEADER
+        h("div",{style:{background:"linear-gradient(135deg,#0f3d22 0%,#1a5c35 50%,#2d7a4f 100%)",padding:"2.5rem 2rem 2rem",textAlign:"center",position:"relative",overflow:"hidden"}},
+          h("div",{style:{position:"absolute",inset:0,opacity:0.05,backgroundImage:"radial-gradient(circle at 20% 50%,#fff 1px,transparent 1px)",backgroundSize:"40px 40px"}}),
+          h("div",{style:{position:"relative"}},
+            h("div",{style:{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.12)",borderRadius:99,padding:"0.3rem 0.9rem",marginBottom:"0.8rem"}},
+              h("span",{style:{fontSize:"0.7rem",fontWeight:700,color:"#a8dbb8",letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}},"\uD83C\uDF3F Interactive Calculator")
+            ),
+            h("h1",{style:{margin:0,fontSize:"clamp(1.6rem,4vw,2.4rem)",fontWeight:800,color:"#fff",lineHeight:1.1}},"Sustainability ROI"),
+            h("p",{style:{margin:"0.6rem auto 0",color:"#c8f0d4",fontSize:"0.9rem",fontFamily:"'DM Sans',sans-serif",maxWidth:460}},"Build your business case. Calculate the financial return, payback period, and carbon impact of your sustainability investment.")
+          )
+        ),
+
+        // CONTROLS
+        h("div",{className:"no-print",style:{background:"#fff",borderBottom:"1.5px solid #d4e9dc",padding:"0.8rem 1.5rem",display:"flex",gap:"0.7rem",flexWrap:"wrap",alignItems:"center",justifyContent:"center"}},
+          sel(horizon[0],horizon[1],HORIZONS," Yrs"),
+          sel(wacc[0],wacc[1],WACCS,"%"),
+          h("div",{style:{position:"relative"}},
+            h("select",{value:currency[0],onChange:function(e){currency[1](Number(e.target.value));},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+              CURRENCIES.map(function(c,i){return h("option",{key:i,value:i},c.label);})),
+            h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"\u25be")
+          ),
+          h("div",{style:{marginLeft:"auto",background:"#f0faf4",borderRadius:99,padding:"0.25rem",display:"flex",gap:2}},
+            tabBtn("inputs","\u2699 Inputs"),
+            tabBtn("results","\uD83D\uDCCA Results")
+          )
+        ),
+
+        // MAIN
+        h("div",{style:{maxWidth:920,margin:"0 auto",padding:"1.5rem 1rem 3rem"}},
+
+          // --- INPUTS ---
+          tab[0]==="inputs" && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
+
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h("h2",{style:{margin:"0 0 1rem",fontSize:"1rem",fontWeight:800}},"Investment Type"),
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:"0.6rem"}},
+                INVESTMENT_TYPES.map(function(t,i){
+                  return h("button",{key:i,onClick:function(){invType[1](i);},style:{padding:"0.65rem 0.9rem",borderRadius:12,border:invType[0]===i?"2px solid #2d7a4f":"1.5px solid #d4e9dc",background:invType[0]===i?"#f0faf4":"#fff",color:invType[0]===i?"#1a5c35":"#4a7a5a",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:invType[0]===i?700:500,cursor:"pointer",textAlign:"left"}},
+                    t.label,
+                    h("div",{style:{fontSize:"0.65rem",color:"#8aab97",marginTop:2}},t.co2Rate+" kg CO\u2082/"+sym+"/yr")
+                  );
+                })
+              )
+            ),
+
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h("h2",{style:{margin:"0 0 1.2rem",fontSize:"1rem",fontWeight:800}},"Financial Inputs"),
+              h(SliderInput,{label:"Investment Cost",value:cost[0],min:50000,max:10000000,step:50000,onChange:cost[1],sym:sym,info:"Total upfront capital expenditure"}),
+              h(SliderInput,{label:"Annual Cost Savings (Yr 1)",value:savings[0],min:0,max:500000,step:5000,onChange:savings[1],sym:sym,info:"Energy, operational, material savings",color:"#1a8c50"}),
+              h(SliderInput,{label:"Annual Risk Avoidance (Yr 1)",value:riskAvoid[0],min:0,max:200000,step:2500,onChange:riskAvoid[1],sym:sym,info:"Avoided fines, penalties, insurance",color:"#2a9d6f"}),
+              h(SliderInput,{label:"Annual Revenue Growth (Yr 1)",value:revGrowth[0],min:0,max:200000,step:2500,onChange:revGrowth[1],sym:sym,info:"Revenue from green credentials",color:"#3ab080"}),
+              h(SliderInput,{label:"Financing Benefit (Yr 1)",value:finBonus[0],min:0,max:100000,step:2500,onChange:finBonus[1],sym:sym,info:"Lower cost of capital from green loans",color:"#4abf8a"})
+            ),
+
+            h("button",{onClick:function(){tab[1]("results");},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"1rem 2rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",boxShadow:"0 4px 20px rgba(29,92,53,0.3)"}},"Calculate ROI \u2192")
+          ),
+
+          // --- RESULTS ---
+          tab[0]==="results" && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
+
+            h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:"0.8rem"}},
+              h(KPI,{label:"Enhanced ROI",value:enhROI.toFixed(1)+"%",sub:"With 3% escalation",accent:true,big:true}),
+              h(KPI,{label:"Basic ROI",value:basicROI.toFixed(1)+"%",sub:"No escalation"}),
+              h(KPI,{label:"Net Present Value",value:fmt(npv,sym),sub:horizon[0]+"-yr net value"}),
+              h(KPI,{label:"Payback Period",value:payback?payback.toFixed(1)+" yrs":"Beyond horizon",sub:"Years to break even"}),
+              h(KPI,{label:"Carbon Tax Savings",value:fmt(ctSave,sym),sub:co2s.toFixed(0)+" t CO\u2082 saved"}),
+              h(KPI,{label:"Annual Value",value:fmt(benefit,sym),sub:"Year 1 total benefit"})
+            ),
+
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h("h2",{style:{margin:"0 0 0.3rem",fontSize:"1rem",fontWeight:800}},"ROI Timeline"),
+              h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Cumulative return over "+horizon[0]+" years \u00b7 WACC "+wacc[0]+"% \u00b7 3% annual escalation"),
+              h(Chart,{data:yearly,sym:sym,inaction:showInaction[0]?inaction:null})
+            ),
+
+            h("button",{onClick:function(){showInaction[1](function(v){return !v;});},style:{background:showInaction[0]?"#6b2020":"#fff3f3",color:showInaction[0]?"#fff":"#8b2a2a",border:"2px solid #8b2a2a",borderRadius:14,padding:"0.85rem 1.5rem",fontSize:"0.88rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",transition:"all 0.2s"}},
+              "\u26a0\ufe0f "+(showInaction[0]?"Hide":"Show")+" Cost of Inaction",
+              !showInaction[0] && h("span",{style:{marginLeft:"auto",fontSize:"0.75rem",color:"#c0392b",fontWeight:600}},"Est. "+fmt(totalLoss,sym)+" loss over "+horizon[0]+" yrs")
+            ),
+
+            showInaction[0] && h("div",{className:"fade-up",style:{background:"linear-gradient(135deg,#3d1515,#6b2020)",borderRadius:20,padding:"1.8rem",color:"#fff"}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:"1rem"}},
+                h("span",{style:{fontSize:"1.4rem"}},"\u26a0\ufe0f"),
+                h("h2",{style:{margin:0,fontSize:"1.1rem",fontWeight:800,color:"#ffb3b3"}},"Cost of Inaction")
+              ),
+              h("p",{style:{margin:"0 0 1.2rem",fontSize:"0.85rem",color:"#ffd5d5",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}},"If you delay or forgo this investment, here is what your organisation stands to lose over "+horizon[0]+" years."),
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:"0.8rem",marginBottom:"1.2rem"}},
+                [
+                  {l:"Total Opportunity Loss",v:fmt(totalLoss,sym),s:"Over "+horizon[0]+" years (discounted)"},
+                  {l:"Avg Annual Loss",v:fmt(totalLoss/horizon[0],sym),s:"Per year of delay"},
+                  {l:"Carbon Regulatory Risk",v:fmt(co2s*BASE_CARBON*horizon[0]*(1+CARBON_ESC*horizon[0]/2),sym),s:"Escalating carbon taxes"},
+                  {l:"Extra Breakeven Delay",v:"+"+(horizon[0]*0.3).toFixed(1)+" yrs",s:"If you act later"}
+                ].map(function(item){
+                  return h("div",{key:item.l,style:{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"0.9rem 1rem"}},
+                    h("div",{style:{fontSize:"0.65rem",fontWeight:700,color:"#ffb3b3",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}},item.l),
+                    h("div",{style:{fontSize:"1.15rem",fontWeight:800,color:"#fff"}},item.v),
+                    h("div",{style:{fontSize:"0.7rem",color:"#ffcccc",marginTop:3}},item.s)
+                  );
+                })
+              ),
+              h("div",{style:{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:"0.9rem 1rem",fontSize:"0.78rem",color:"#ffd5d5",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}},
+                h("strong",{style:{color:"#ffb3b3"}},"Key risks of inaction: "),
+                "Rising energy costs, escalating carbon taxes (5%/yr), ESG reputational risk, and competitive disadvantage as peers decarbonise."
+              )
+            ),
+
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h("h2",{style:{margin:"0 0 1rem",fontSize:"1rem",fontWeight:800}},"Year-by-Year Breakdown"),
+              h("div",{style:{overflowX:"auto"}},
+                h("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:"0.78rem",fontFamily:"'DM Sans',sans-serif"}},
+                  h("thead",null,h("tr",{style:{borderBottom:"2px solid #d4e9dc"}},
+                    ["Year","Gross Benefit","Disc. Benefit","Cumulative Return","Status"].map(function(hdr){
+                      return h("th",{key:hdr,style:{padding:"0.5rem 0.8rem",textAlign:"left",fontWeight:700,color:"#4a7a5a",fontSize:"0.7rem",textTransform:"uppercase",letterSpacing:"0.05em"}},hdr);
+                    })
+                  )),
+                  h("tbody",null,yearly.slice(1).map(function(d,i){
+                    return h("tr",{key:i,style:{borderBottom:"1px solid #edf7f1",background:i%2===0?"#fafffe":"#fff"}},
+                      h("td",{style:{padding:"0.45rem 0.8rem",fontWeight:700,color:"#1a3d2b"}},d.year),
+                      h("td",{style:{padding:"0.45rem 0.8rem",color:"#2d7a4f"}},fmt(d.b,sym)),
+                      h("td",{style:{padding:"0.45rem 0.8rem",color:"#4a7a5a"}},fmt(d.db,sym)),
+                      h("td",{style:{padding:"0.45rem 0.8rem",fontWeight:700,color:d.c>=0?"#1a8c50":"#c0392b"}},fmt(d.c,sym)),
+                      h("td",{style:{padding:"0.45rem 0.8rem"}},
+                        h("span",{style:{padding:"0.15rem 0.6rem",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:d.c>=0?"#d4f0e0":"#fde8e8",color:d.c>=0?"#1a5c35":"#c0392b"}},
+                          d.c>=0?"\u2713 Positive":"\u25bc Recovering"
+                        )
+                      )
+                    );
+                  }))
+                )
+              )
+            ),
+
+            h("div",{style:{background:"linear-gradient(135deg,#0f3d22,#1a5c35)",borderRadius:20,padding:"1.8rem",color:"#fff"}},
+              h("h2",{style:{margin:"0 0 0.8rem",fontSize:"1rem",fontWeight:800,color:"#a8dbb8",letterSpacing:"0.05em",textTransform:"uppercase"}},"Investment Summary"),
+              h("p",{style:{margin:0,fontSize:"0.95rem",lineHeight:1.8,fontFamily:"'DM Sans',sans-serif",color:"#e8f8f0"}},
+                "Your ",h("strong",{style:{color:"#fff"}},fmt(cost[0],sym))," ",it.label.toLowerCase()," investment generates an estimated enhanced return of ",
+                h("strong",{style:{color:"#a8dbb8"}},enhROI.toFixed(1)+"%")," (or ",h("strong",{style:{color:"#a8dbb8"}},basicROI.toFixed(1)+"%")," basic), with a payback of ",
+                h("strong",{style:{color:"#fff"}},payback?payback.toFixed(1)+" years":"beyond the selected horizon"),". NPV is ",
+                h("strong",{style:{color:"#fff"}},fmt(npv,sym)),", creating ",h("strong",{style:{color:"#fff"}},fmt(benefit,sym))," in annual value. Saves ",
+                h("strong",{style:{color:"#a8dbb8"}},co2s.toFixed(1)+" t CO\u2082"),", yielding ",h("strong",{style:{color:"#a8dbb8"}},fmt(ctSave,sym))," in carbon benefits.",
+                showInaction[0] && [" Delaying could cost ",h("strong",{style:{color:"#ffaaaa"}},fmt(totalLoss,sym))," over "+horizon[0]+" years."]
+              ),
+              h("p",{style:{margin:"1rem 0 0",fontSize:"0.68rem",color:"#6aab7f",fontFamily:"'DM Sans',sans-serif",fontStyle:"italic"}},"Disclaimer: All figures are estimates and should not be considered guaranteed outcomes. Consult a financial advisor before making investment decisions.")
+            ),
+
+            h("div",{className:"no-print",style:{display:"flex",gap:"0.8rem",flexWrap:"wrap"}},
+              h("button",{onClick:function(){tab[1]("inputs");},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1,minWidth:140}},"\u2190 Adjust Inputs"),
+              h("button",{onClick:function(){window.print();},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:2,minWidth:180,boxShadow:"0 4px 16px rgba(29,92,53,0.25)"}},"\uD83D\uDDB8 Export / Print as PDF")
+            )
+          )
+        ),
+
+        h("div",{style:{textAlign:"center",padding:"1.5rem",borderTop:"1px solid #d4e9dc",fontSize:"0.7rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},
+          "Sustainability ROI Calculator \u00b7 DCF-adjusted NPV methodology \u00b7 "+new Date().getFullYear()
+        )
+      );
+    }
+
+    var root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(h(App, null));
+    setTimeout(function(){
+      var splash = document.getElementById("splash");
+      if(splash) splash.classList.add("hidden");
+    }, 800);
+  })();
   </script>
 </body>
 </html>
