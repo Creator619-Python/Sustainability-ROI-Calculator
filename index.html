@@ -13,6 +13,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Google Analytics 4 — replace G-XXXXXXXXXX with your Measurement ID -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { min-height: 100%; }
@@ -237,7 +246,7 @@
       }
 
       function tabBtn(t,label){
-        return h("button",{key:t,onClick:function(){tab[1](t);},style:{padding:"0.55rem 1.2rem",borderRadius:99,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.78rem",transition:"all 0.2s",background:tab[0]===t?"#1a5c35":"transparent",color:tab[0]===t?"#fff":"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},label);
+        return h("button",{key:t,onClick:function(){tab[1](t); if(typeof gtag!=="undefined") gtag("event","tab_switch",{tab_name:t});},style:{padding:"0.55rem 1.2rem",borderRadius:99,border:"none",cursor:"pointer",fontWeight:700,fontSize:"0.78rem",transition:"all 0.2s",background:tab[0]===t?"#1a5c35":"transparent",color:tab[0]===t?"#fff":"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},label);
       }
 
       return h("div",{style:{minHeight:"100vh",background:"linear-gradient(160deg,#f0faf4 0%,#e8f5ee 40%,#f5fdf7 100%)",fontFamily:"'Bitter',Georgia,serif",color:"#1a3d2b"}},
@@ -279,7 +288,7 @@
               h("h2",{style:{margin:"0 0 1rem",fontSize:"1rem",fontWeight:800}},"Investment Type"),
               h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:"0.6rem"}},
                 INVESTMENT_TYPES.map(function(t,i){
-                  return h("button",{key:i,onClick:function(){invType[1](i);},style:{padding:"0.65rem 0.9rem",borderRadius:12,border:invType[0]===i?"2px solid #2d7a4f":"1.5px solid #d4e9dc",background:invType[0]===i?"#f0faf4":"#fff",color:invType[0]===i?"#1a5c35":"#4a7a5a",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:invType[0]===i?700:500,cursor:"pointer",textAlign:"left"}},
+                  return h("button",{key:i,onClick:function(){invType[1](i); if(typeof gtag!=="undefined") gtag("event","select_investment_type",{investment_type:INVESTMENT_TYPES[i].label});},style:{padding:"0.65rem 0.9rem",borderRadius:12,border:invType[0]===i?"2px solid #2d7a4f":"1.5px solid #d4e9dc",background:invType[0]===i?"#f0faf4":"#fff",color:invType[0]===i?"#1a5c35":"#4a7a5a",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:invType[0]===i?700:500,cursor:"pointer",textAlign:"left"}},
                     t.label,
                     h("div",{style:{fontSize:"0.65rem",color:"#8aab97",marginTop:2}},t.co2Rate+" kg CO\u2082/"+sym+"/yr")
                   );
@@ -296,7 +305,7 @@
               h(SliderInput,{label:"Financing Benefit (Yr 1)",value:finBonus[0],min:0,max:100000,step:2500,onChange:finBonus[1],sym:sym,info:"Lower cost of capital from green loans",color:"#4abf8a"})
             ),
 
-            h("button",{onClick:function(){tab[1]("results");},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"1rem 2rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",boxShadow:"0 4px 20px rgba(29,92,53,0.3)"}},"Calculate ROI \u2192")
+            h("button",{onClick:function(){tab[1]("results"); if(typeof gtag!=="undefined") gtag("event","calculate_roi",{investment_cost:cost[0],annual_benefit:benefit,horizon_years:horizon[0],wacc:wacc[0]});},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"1rem 2rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",boxShadow:"0 4px 20px rgba(29,92,53,0.3)"}},"Calculate ROI \u2192")
           ),
 
           // --- RESULTS ---
@@ -317,7 +326,7 @@
               h(Chart,{data:yearly,sym:sym,inaction:showInaction[0]?inaction:null})
             ),
 
-            h("button",{onClick:function(){showInaction[1](function(v){return !v;});},style:{background:showInaction[0]?"#6b2020":"#fff3f3",color:showInaction[0]?"#fff":"#8b2a2a",border:"2px solid #8b2a2a",borderRadius:14,padding:"0.85rem 1.5rem",fontSize:"0.88rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",transition:"all 0.2s"}},
+            h("button",{onClick:function(){showInaction[1](function(v){var next=!v; if(typeof gtag!=="undefined") gtag("event","toggle_cost_of_inaction",{visible:next}); return next;});},style:{background:showInaction[0]?"#6b2020":"#fff3f3",color:showInaction[0]?"#fff":"#8b2a2a",border:"2px solid #8b2a2a",borderRadius:14,padding:"0.85rem 1.5rem",fontSize:"0.88rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",transition:"all 0.2s"}},
               "\u26a0\ufe0f "+(showInaction[0]?"Hide":"Show")+" Cost of Inaction",
               !showInaction[0] && h("span",{style:{marginLeft:"auto",fontSize:"0.75rem",color:"#c0392b",fontWeight:600}},"Est. "+fmt(totalLoss,sym)+" loss over "+horizon[0]+" yrs")
             ),
@@ -389,7 +398,7 @@
 
             h("div",{className:"no-print",style:{display:"flex",gap:"0.8rem",flexWrap:"wrap"}},
               h("button",{onClick:function(){tab[1]("inputs");},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1,minWidth:140}},"\u2190 Adjust Inputs"),
-              h("button",{onClick:function(){window.print();},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:2,minWidth:180,boxShadow:"0 4px 16px rgba(29,92,53,0.25)"}},"\uD83D\uDDB8 Export / Print as PDF")
+              h("button",{onClick:function(){if(typeof gtag!=="undefined") gtag("event","export_pdf",{investment_cost:cost[0],roi:enhROI.toFixed(1)}); window.print();},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:2,minWidth:180,boxShadow:"0 4px 16px rgba(29,92,53,0.25)"}},"\uD83D\uDDB8 Export / Print as PDF")
             )
           )
         ),
