@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- PWA Meta -->
+  <title>Sustainability ROI Calculator</title>
+  <meta name="description" content="Calculate the financial return, payback period, and carbon impact of your sustainability investments." />
+  <meta name="theme-color" content="#1a5c35" />
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Apple / iOS PWA support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SustainROI" />
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+
+  <!-- Windows / MS Tile -->
+  <meta name="msapplication-TileColor" content="#1a5c35" />
+  <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
+
+  <!-- Open Graph (for sharing) -->
+  <meta property="og:title" content="Sustainability ROI Calculator" />
+  <meta property="og:description" content="Build your sustainability business case. Calculate ROI, NPV, payback period, and carbon impact." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/screenshots/desktop.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
+
+  <!-- Fonts preload -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { background: #f0faf4; }
+    /* Splash screen while app loads */
+    #splash {
+      position: fixed; inset: 0; background: linear-gradient(135deg, #0f3d22, #2d7a4f);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 9999; transition: opacity 0.4s ease;
+    }
+    #splash.hidden { opacity: 0; pointer-events: none; }
+    #splash h1 { color: #fff; font-family: Georgia, serif; font-size: 1.6rem; margin-top: 1rem; }
+    #splash p { color: #a8dbb8; font-family: sans-serif; font-size: 0.85rem; margin-top: 0.4rem; }
+    .leaf { font-size: 3rem; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.15);} }
+  </style>
+</head>
+<body>
+  <!-- Splash screen -->
+  <div id="splash">
+    <div class="leaf">🌿</div>
+    <h1>Sustainability ROI</h1>
+    <p>Loading calculator...</p>
+  </div>
+
+  <!-- React app root -->
+  <div id="root"></div>
+
+  <!-- React + Babel (for direct use; swap for Vite/CRA build in production) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Load the app component -->
+  <script type="text/babel" data-type="module" src="/SustainabilityROI.jsx"></script>
+
+  <script>
+    // Hide splash once React mounts
+    window.__hideSplash = function () {
+      const splash = document.getElementById("splash");
+      if (splash) splash.classList.add("hidden");
+    };
+
+    // Register Service Worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/service-worker.js")
+          .then((reg) => console.log("[PWA] Service Worker registered:", reg.scope))
+          .catch((err) => console.warn("[PWA] SW registration failed:", err));
+      });
+    }
+
+    // Hide splash after short delay (fallback)
+    setTimeout(() => {
+      const splash = document.getElementById("splash");
+      if (splash) splash.classList.add("hidden");
+    }, 1800);
+  </script>
+</body>
+</html>
