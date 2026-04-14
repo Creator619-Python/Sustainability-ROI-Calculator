@@ -67,24 +67,191 @@
     var useState = React.useState;
     var useMemo = React.useMemo;
 
+    // ── Grid Emission Factors (kg CO2e/kWh) — IEA Emission Factors 2023 ──
+    // Source: https://www.iea.org/data-and-statistics/data-product/emissions-factors-2023
+    var GRID_EF = {
+      "IN":  { name: "India",         ef: 0.82, currency: "INR (₹)", sym: "₹",  source: "IEA 2023", carbonPrice: 2 },
+      "US":  { name: "USA",           ef: 0.38, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 15 },
+      "EU":  { name: "EU (avg)",      ef: 0.27, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 65 },
+      "GB":  { name: "UK",            ef: 0.21, currency: "GBP (£)", sym: "£", source: "IEA 2023", carbonPrice: 45 },
+      "AE":  { name: "UAE",           ef: 0.45, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 0 },
+      "CN":  { name: "China",         ef: 0.61, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 8 },
+      "JP":  { name: "Japan",         ef: 0.47, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 3 },
+      "AU":  { name: "Australia",     ef: 0.51, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 20 },
+      "BR":  { name: "Brazil",        ef: 0.10, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 4 },
+      "ZA":  { name: "South Africa",  ef: 0.90, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 10 },
+      "DE":  { name: "Germany",       ef: 0.28, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 65 },
+      "FR":  { name: "France",        ef: 0.06, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 45 },
+      "CA":  { name: "Canada",        ef: 0.13, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 50 },
+      "SG":  { name: "Singapore",     ef: 0.41, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 25 },
+      "CUSTOM": { name: "Custom",     ef: 0.50, currency: "USD ($)",     sym: "$",   source: "User defined", carbonPrice: 50 }
+    };
+
+    // ── Investment Types — activity-based EF model (GHG Protocol / IEA / IPCC AR6) ──
+    // actUnit = activity unit per 1000 currency units invested
+    // efField = which EF to use: "grid" = country grid EF, "fixed" = fixed factor, "custom" = user sets
     var INVESTMENT_TYPES = [
-      { label: "Solar Panel Installation", co2Rate: 0.8, life: 25, abatement: 50 },
-      { label: "Energy Efficiency Retrofit", co2Rate: 0.5, life: 20, abatement: 40 },
-      { label: "EV Fleet Transition", co2Rate: 0.6, life: 10, abatement: 45 },
-      { label: "Waste Reduction Program", co2Rate: 0.3, life: 15, abatement: 30 },
-      { label: "Green Building Certification", co2Rate: 0.4, life: 30, abatement: 35 },
-      { label: "Water Recycling System", co2Rate: 0.2, life: 20, abatement: 25 }
+      {
+        label: "Solar Panel Installation",
+        actUnit: 1.8,        // MWh saved per 1000 currency units invested/yr
+        efField: "grid",     // uses country grid EF (displacing grid electricity)
+        life: 25, abatement: 52,
+        source: "IEA Renewables 2023", sourceUrl: "https://www.iea.org/reports/renewables-2023",
+        actLabel: "MWh/yr saved", hint: "Grid electricity displaced"
+      },
+      {
+        label: "Energy Efficiency Retrofit",
+        actUnit: 1.4,
+        efField: "grid",
+        life: 20, abatement: 42,
+        source: "GHG Protocol / IEA EE Report", sourceUrl: "https://ghgprotocol.org",
+        actLabel: "MWh/yr saved", hint: "Electricity and heat savings"
+      },
+      {
+        label: "EV Fleet Transition",
+        actUnit: 8500,       // km/yr per 1000 currency units invested
+        efField: "fixed",
+        fixedEf: 0.000145,   // kg CO2/km (IEA: ICE vs EV delta, Global EV Outlook 2023)
+        life: 10, abatement: 47,
+        source: "IEA Global EV Outlook 2023", sourceUrl: "https://www.iea.org/reports/global-ev-outlook-2023",
+        actLabel: "km/yr driven", hint: "Tailpipe emissions avoided"
+      },
+      {
+        label: "Waste Reduction Program",
+        actUnit: 0.22,       // tonnes waste/yr per 1000 currency units
+        efField: "fixed",
+        fixedEf: 1.3,        // kg CO2e/kg waste (IPCC AR6 WGIII Ch.7 landfill CH4)
+        life: 15, abatement: 32,
+        source: "IPCC AR6 WGIII Ch.7", sourceUrl: "https://www.ipcc.ch/report/ar6/wg3/",
+        actLabel: "tonnes waste/yr", hint: "Landfill methane avoided"
+      },
+      {
+        label: "Green Building Certification",
+        actUnit: 1.2,
+        efField: "grid",
+        life: 30, abatement: 38,
+        source: "GHG Protocol / UNEP Buildings", sourceUrl: "https://ghgprotocol.org",
+        actLabel: "MWh/yr saved", hint: "HVAC and lighting efficiency"
+      },
+      {
+        label: "Water Recycling System",
+        actUnit: 0.9,
+        efField: "grid",
+        life: 20, abatement: 27,
+        source: "IPCC AR6 WGIII Ch.4", sourceUrl: "https://www.ipcc.ch/report/ar6/wg3/",
+        actLabel: "MWh/yr saved", hint: "Pumping and treatment energy"
+      },
+      {
+        label: "Reforestation / Afforestation",
+        actUnit: 0.012,      // ha/yr per 1000 currency units
+        efField: "fixed",
+        fixedEf: 5000,       // kg CO2e/ha/yr sequestered (IPCC AR6 tropical avg)
+        life: 30, abatement: 60,
+        source: "IPCC AR6 WGIII Ch.7", sourceUrl: "https://www.ipcc.ch/report/ar6/wg3/",
+        actLabel: "ha/yr planted", hint: "Carbon sequestration"
+      },
+      {
+        label: "Renewable Heat / Biomass",
+        actUnit: 1.1,
+        efField: "fixed",
+        fixedEf: 0.20,       // kg CO2e/kWh (IEA Bioenergy vs fossil heat)
+        life: 20, abatement: 40,
+        source: "IEA Bioenergy 2023", sourceUrl: "https://www.iea.org/energy-system/renewables/bioenergy",
+        actLabel: "MWh/yr saved", hint: "Fossil fuel heat displaced"
+      },
+      {
+        label: "Carbon Capture (CCUS)",
+        actUnit: 0.8,        // tCO2/yr per 1000 currency units
+        efField: "fixed",
+        fixedEf: 1000,       // kg CO2 per tCO2 captured (direct)
+        life: 25, abatement: 70,
+        source: "IEA CCUS 2023", sourceUrl: "https://www.iea.org/reports/carbon-capture-utilisation-and-storage-2",
+        actLabel: "tCO₂/yr captured", hint: "Direct carbon removal"
+      },
+      {
+        label: "Custom / Enter Your Own",
+        actUnit: 1.0,
+        efField: "custom",
+        fixedEf: 0.50,
+        life: 20, abatement: 40,
+        source: "User defined", sourceUrl: "",
+        actLabel: "units/yr", hint: "User defined activity"
+      }
     ];
+
     var CURRENCIES = [
-      { label: "EUR (\u20ac)", symbol: "\u20ac" },
       { label: "USD ($)", symbol: "$" },
-      { label: "GBP (\u00a3)", symbol: "\u00a3" },
-      { label: "SEK (kr)", symbol: "kr" }
+      { label: "EUR (€)", symbol: "€" },
+      { label: "GBP (£)", symbol: "£" },
+      { label: "INR (₹)", symbol: "₹" },
+      { label: "AED (د.إ)", symbol: "AED" },
+      { label: "JPY (¥)", symbol: "¥" },
+      { label: "CNY (¥)", symbol: "¥" },
+      { label: "AUD (A$)", symbol: "A$" },
+      { label: "CAD (C$)", symbol: "C$" },
+      { label: "SGD (S$)", symbol: "S$" },
+      { label: "BRL (R$)", symbol: "R$" },
+      { label: "ZAR (R)", symbol: "R" },
+      { label: "SEK (kr)", symbol: "kr" },
+      { label: "NOK (kr)", symbol: "kr" },
+      { label: "CHF (Fr)", symbol: "Fr" }
     ];
-    var WACCS = [4, 6, 8, 10, 12];
+
+    // All world currencies for search/custom input
+    var ALL_CURRENCIES = [
+      {c:"AFN",s:"؋",n:"Afghan Afghani"},{c:"ALL",s:"L",n:"Albanian Lek"},{c:"DZD",s:"د.ج",n:"Algerian Dinar"},
+      {c:"AOA",s:"Kz",n:"Angolan Kwanza"},{c:"ARS",s:"$",n:"Argentine Peso"},{c:"AMD",s:"֏",n:"Armenian Dram"},
+      {c:"AWG",s:"ƒ",n:"Aruban Florin"},{c:"AUD",s:"A$",n:"Australian Dollar"},{c:"AZN",s:"₼",n:"Azerbaijani Manat"},
+      {c:"BSD",s:"$",n:"Bahamian Dollar"},{c:"BHD",s:".د.ب",n:"Bahraini Dinar"},{c:"BDT",s:"৳",n:"Bangladeshi Taka"},
+      {c:"BBD",s:"$",n:"Barbadian Dollar"},{c:"BYN",s:"Br",n:"Belarusian Ruble"},{c:"BZD",s:"$",n:"Belize Dollar"},
+      {c:"XOF",s:"Fr",n:"West African CFA"},{c:"BMD",s:"$",n:"Bermudian Dollar"},{c:"BTN",s:"Nu",n:"Bhutanese Ngultrum"},
+      {c:"BOB",s:"Bs",n:"Bolivian Boliviano"},{c:"BAM",s:"KM",n:"Bosnia Mark"},{c:"BWP",s:"P",n:"Botswana Pula"},
+      {c:"BRL",s:"R$",n:"Brazilian Real"},{c:"BND",s:"$",n:"Brunei Dollar"},{c:"BGN",s:"лв",n:"Bulgarian Lev"},
+      {c:"BIF",s:"Fr",n:"Burundian Franc"},{c:"CVE",s:"$",n:"Cape Verdean Escudo"},{c:"KHR",s:"៛",n:"Cambodian Riel"},
+      {c:"XAF",s:"Fr",n:"Central African CFA"},{c:"CAD",s:"C$",n:"Canadian Dollar"},{c:"KYD",s:"$",n:"Cayman Dollar"},
+      {c:"CLP",s:"$",n:"Chilean Peso"},{c:"CNY",s:"¥",n:"Chinese Yuan"},{c:"COP",s:"$",n:"Colombian Peso"},
+      {c:"KMF",s:"Fr",n:"Comorian Franc"},{c:"CDF",s:"Fr",n:"Congolese Franc"},{c:"CRC",s:"₡",n:"Costa Rican Colón"},
+      {c:"HRK",s:"kn",n:"Croatian Kuna"},{c:"CUP",s:"$",n:"Cuban Peso"},{c:"CZK",s:"Kč",n:"Czech Koruna"},
+      {c:"DKK",s:"kr",n:"Danish Krone"},{c:"DJF",s:"Fr",n:"Djiboutian Franc"},{c:"DOP",s:"$",n:"Dominican Peso"},
+      {c:"EGP",s:"£",n:"Egyptian Pound"},{c:"ERN",s:"Nfk",n:"Eritrean Nakfa"},{c:"ETB",s:"Br",n:"Ethiopian Birr"},
+      {c:"EUR",s:"€",n:"Euro"},{c:"FJD",s:"$",n:"Fijian Dollar"},{c:"GMD",s:"D",n:"Gambian Dalasi"},
+      {c:"GEL",s:"₾",n:"Georgian Lari"},{c:"GHS",s:"₵",n:"Ghanaian Cedi"},{c:"GTQ",s:"Q",n:"Guatemalan Quetzal"},
+      {c:"GNF",s:"Fr",n:"Guinean Franc"},{c:"GYD",s:"$",n:"Guyanese Dollar"},{c:"HTG",s:"G",n:"Haitian Gourde"},
+      {c:"HNL",s:"L",n:"Honduran Lempira"},{c:"HKD",s:"$",n:"Hong Kong Dollar"},{c:"HUF",s:"Ft",n:"Hungarian Forint"},
+      {c:"ISK",s:"kr",n:"Icelandic Króna"},{c:"INR",s:"₹",n:"Indian Rupee"},{c:"IDR",s:"Rp",n:"Indonesian Rupiah"},
+      {c:"IRR",s:"﷼",n:"Iranian Rial"},{c:"IQD",s:"ع.د",n:"Iraqi Dinar"},{c:"ILS",s:"₪",n:"Israeli Shekel"},
+      {c:"JMD",s:"$",n:"Jamaican Dollar"},{c:"JPY",s:"¥",n:"Japanese Yen"},{c:"JOD",s:"د.ا",n:"Jordanian Dinar"},
+      {c:"KZT",s:"₸",n:"Kazakhstani Tenge"},{c:"KES",s:"Sh",n:"Kenyan Shilling"},{c:"KWD",s:"د.ك",n:"Kuwaiti Dinar"},
+      {c:"KGS",s:"с",n:"Kyrgyzstani Som"},{c:"LAK",s:"₭",n:"Lao Kip"},{c:"LBP",s:"ل.ل",n:"Lebanese Pound"},
+      {c:"LSL",s:"L",n:"Lesotho Loti"},{c:"LRD",s:"$",n:"Liberian Dollar"},{c:"LYD",s:"ل.د",n:"Libyan Dinar"},
+      {c:"MOP",s:"P",n:"Macanese Pataca"},{c:"MKD",s:"ден",n:"Macedonian Denar"},{c:"MGA",s:"Ar",n:"Malagasy Ariary"},
+      {c:"MWK",s:"MK",n:"Malawian Kwacha"},{c:"MYR",s:"RM",n:"Malaysian Ringgit"},{c:"MVR",s:"ރ.",n:"Maldivian Rufiyaa"},
+      {c:"MRU",s:"UM",n:"Mauritanian Ouguiya"},{c:"MUR",s:"₨",n:"Mauritian Rupee"},{c:"MXN",s:"$",n:"Mexican Peso"},
+      {c:"MDL",s:"L",n:"Moldovan Leu"},{c:"MNT",s:"₮",n:"Mongolian Tögrög"},{c:"MAD",s:"د.م.",n:"Moroccan Dirham"},
+      {c:"MZN",s:"MT",n:"Mozambican Metical"},{c:"MMK",s:"K",n:"Myanmar Kyat"},{c:"NAD",s:"$",n:"Namibian Dollar"},
+      {c:"NPR",s:"₨",n:"Nepalese Rupee"},{c:"NZD",s:"$",n:"New Zealand Dollar"},{c:"NIO",s:"C$",n:"Nicaraguan Córdoba"},
+      {c:"NGN",s:"₦",n:"Nigerian Naira"},{c:"NOK",s:"kr",n:"Norwegian Krone"},{c:"OMR",s:"ر.ع.",n:"Omani Rial"},
+      {c:"PKR",s:"₨",n:"Pakistani Rupee"},{c:"PAB",s:"B/.",n:"Panamanian Balboa"},{c:"PGK",s:"K",n:"Papua New Guinean Kina"},
+      {c:"PYG",s:"₲",n:"Paraguayan Guaraní"},{c:"PEN",s:"S/",n:"Peruvian Sol"},{c:"PHP",s:"₱",n:"Philippine Peso"},
+      {c:"PLN",s:"zł",n:"Polish Złoty"},{c:"QAR",s:"ر.ق",n:"Qatari Riyal"},{c:"RON",s:"lei",n:"Romanian Leu"},
+      {c:"RUB",s:"₽",n:"Russian Ruble"},{c:"RWF",s:"Fr",n:"Rwandan Franc"},{c:"SAR",s:"ر.س",n:"Saudi Riyal"},
+      {c:"RSD",s:"din",n:"Serbian Dinar"},{c:"SLL",s:"Le",n:"Sierra Leonean Leone"},{c:"SGD",s:"S$",n:"Singapore Dollar"},
+      {c:"SOS",s:"Sh",n:"Somali Shilling"},{c:"ZAR",s:"R",n:"South African Rand"},{c:"KRW",s:"₩",n:"South Korean Won"},
+      {c:"SSP",s:"£",n:"South Sudanese Pound"},{c:"LKR",s:"₨",n:"Sri Lankan Rupee"},{c:"SDG",s:"£",n:"Sudanese Pound"},
+      {c:"SZL",s:"L",n:"Swazi Lilangeni"},{c:"SEK",s:"kr",n:"Swedish Krona"},{c:"CHF",s:"Fr",n:"Swiss Franc"},
+      {c:"TWD",s:"$",n:"Taiwan Dollar"},{c:"TJS",s:"SM",n:"Tajikistani Somoni"},{c:"TZS",s:"Sh",n:"Tanzanian Shilling"},
+      {c:"THB",s:"฿",n:"Thai Baht"},{c:"TOP",s:"T$",n:"Tongan Paʻanga"},{c:"TTD",s:"$",n:"Trinidad Dollar"},
+      {c:"TND",s:"د.ت",n:"Tunisian Dinar"},{c:"TRY",s:"₺",n:"Turkish Lira"},{c:"TMT",s:"T",n:"Turkmenistan Manat"},
+      {c:"UGX",s:"Sh",n:"Ugandan Shilling"},{c:"UAH",s:"₴",n:"Ukrainian Hryvnia"},{c:"AED",s:"د.إ",n:"UAE Dirham"},
+      {c:"GBP",s:"£",n:"British Pound"},{c:"USD",s:"$",n:"US Dollar"},{c:"UYU",s:"$",n:"Uruguayan Peso"},
+      {c:"UZS",s:"so'm",n:"Uzbekistani Som"},{c:"VUV",s:"Vt",n:"Vanuatu Vatu"},{c:"VES",s:"Bs.S",n:"Venezuelan Bolívar"},
+      {c:"VND",s:"₫",n:"Vietnamese Đồng"},{c:"YER",s:"﷼",n:"Yemeni Rial"},{c:"ZMW",s:"ZK",n:"Zambian Kwacha"},
+      {c:"ZWL",s:"$",n:"Zimbabwean Dollar"}
+    ];
+
+    var WACCS = [4, 6, 8, 10, 12, 14, 16, 18, 20];
     var HORIZONS = [5, 10, 15, 20, 25];
     var CARBON_ESC = 0.05;
-    var BASE_CARBON = 50;
 
     function fmt(val, sym) {
       sym = sym || "\u20ac";
@@ -196,33 +363,54 @@
       var invType = s(0), cost = s(1000000), savings = s(80000), riskAvoid = s(12500);
       var revGrowth = s(20000), finBonus = s(25000), wacc = s(8), horizon = s(10);
       var currency = s(0), tab = s("inputs"), showInaction = s(false);
+      var countryKey = s("IN");
+      var currSearch = s(""), showCurrSearch = s(false), customSym = s(null);
+      var customEf = s(0.50), customActUnit = s(1.0), customLife = s(20), customAbatement = s(40);
+      var escalation = s(3), carbonEsc = s(5);
 
-      var sym = CURRENCIES[currency[0]].symbol;
-      var it = INVESTMENT_TYPES[invType[0]];
+      var gridRow = GRID_EF[countryKey[0]] || GRID_EF["CUSTOM"];
+      var BASE_CARBON = gridRow.carbonPrice;
+      var sym = customSym[0] !== null ? customSym[0] : CURRENCIES[currency[0]].symbol;
+      var isCustom = invType[0] === INVESTMENT_TYPES.length - 1;
+      var itBase = INVESTMENT_TYPES[invType[0]];
+
+      // Resolve effective emission factor (kg CO2e per activity unit)
+      var effectiveEf = isCustom ? customEf[0]
+        : itBase.efField === "grid" ? gridRow.ef
+        : itBase.fixedEf;
+
+      // Activity: units of activity per 1000 currency units invested
+      var actPerK = isCustom ? customActUnit[0] : itBase.actUnit;
+      // tCO2 saved per year = (cost/1000) * actPerK * effectiveEf / 1000
+      var co2sPerYr = (cost[0] / 1000) * actPerK * effectiveEf / 1000;
+
+      var it = isCustom
+        ? { label: "Custom", life: customLife[0], abatement: customAbatement[0], source: "User defined", sourceUrl: "", actLabel: "units/yr", hint: "" }
+        : itBase;
+
       var benefit = savings[0] + riskAvoid[0] + revGrowth[0] + finBonus[0];
 
       var yearly = u(function(){
         var cum = -cost[0];
         return Array.from({length: horizon[0]+1}, function(_,yr){
           if(yr===0) return {year:0,b:0,db:0,c:-cost[0]};
-          var b = benefit * Math.pow(1.03,yr-1);
+          var b = benefit * Math.pow(1+escalation[0]/100,yr-1);
           var db = b / Math.pow(1+wacc[0]/100,yr);
           cum += db;
           return {year:yr,b:b,db:db,c:cum};
         });
-      }, [cost[0],benefit,wacc[0],horizon[0]]);
+      }, [cost[0],benefit,wacc[0],horizon[0],escalation[0]]);
 
       var inaction = u(function(){
-        var co2s = (cost[0]*it.co2Rate)/1000;
         var cum = 0;
         return Array.from({length:horizon[0]+1},function(_,yr){
           if(yr===0) return {year:0,c:0};
-          var lb = benefit*Math.pow(1.03,yr-1);
-          var cp = co2s*BASE_CARBON*Math.pow(1+CARBON_ESC,yr-1);
+          var lb = benefit*Math.pow(1+escalation[0]/100,yr-1);
+          var cp = co2sPerYr*BASE_CARBON*Math.pow(1+carbonEsc[0]/100,yr-1);
           cum -= (lb+cp)/Math.pow(1+wacc[0]/100,yr);
           return {year:yr,c:cum};
         });
-      }, [benefit,horizon[0],wacc[0],cost[0],it]);
+      }, [benefit,horizon[0],wacc[0],co2sPerYr,carbonEsc[0],BASE_CARBON]);
 
       var npv = yearly[yearly.length-1].c;
       var basicROI = ((benefit*horizon[0]-cost[0])/cost[0])*100;
@@ -233,8 +421,8 @@
         }
         return null;
       },[yearly]);
-      var co2s = (cost[0]*it.co2Rate)/1000;
-      var ctSave = co2s*it.abatement;
+      var co2s = co2sPerYr * horizon[0];  // total tCO2 over horizon
+      var ctSave = co2s * (it.abatement / 100) * BASE_CARBON;
       var totalLoss = Math.abs(inaction[inaction.length-1].c);
 
       function sel(val,setFn,opts,sfx){
@@ -267,10 +455,56 @@
         h("div",{className:"no-print",style:{background:"#fff",borderBottom:"1.5px solid #d4e9dc",padding:"0.8rem 1.5rem",display:"flex",gap:"0.7rem",flexWrap:"wrap",alignItems:"center",justifyContent:"center"}},
           sel(horizon[0],horizon[1],HORIZONS," Yrs"),
           sel(wacc[0],wacc[1],WACCS,"%"),
+          sel(escalation[0],escalation[1],[1,2,3,4,5,6,7,8],"%esc"),
           h("div",{style:{position:"relative"}},
-            h("select",{value:currency[0],onChange:function(e){currency[1](Number(e.target.value));},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+            h("select",{value:carbonEsc[0],onChange:function(e){carbonEsc[1](Number(e.target.value));},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+              [3,5,7,10,15].map(function(v){return h("option",{key:v,value:v},v+"% CO₂ esc");})),
+            h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"▾")
+          ),
+          h("div",{style:{position:"relative"}},
+            h("select",{value:currency[0],onChange:function(e){currency[1](Number(e.target.value)); customSym[1](null);},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
               CURRENCIES.map(function(c,i){return h("option",{key:i,value:i},c.label);})),
             h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"\u25be")
+          ),
+          h("div",{style:{position:"relative"}},
+            h("button",{onClick:function(){showCurrSearch[1](function(v){return !v;}); currSearch[1]("");},
+              style:{padding:"0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",
+              background:customSym[0]?"#1a5c35":"#f5fdf7",color:customSym[0]?"#fff":"#1a5c35",
+              fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},
+              customSym[0] ? "\u2713 "+customSym[0] : "\uD83D\uDD0D Other"
+            ),
+            showCurrSearch[0] && h("div",{style:{position:"absolute",top:"110%",left:0,zIndex:999,background:"#fff",
+              borderRadius:12,border:"1.5px solid #c4dece",boxShadow:"0 8px 24px rgba(0,0,0,0.12)",width:240,padding:"0.6rem"}},
+              h("input",{autoFocus:true,placeholder:"Search currency or code...",value:currSearch[0],
+                onChange:function(e){currSearch[1](e.target.value);},
+                style:{width:"100%",padding:"0.4rem 0.6rem",borderRadius:8,border:"1.5px solid #c4dece",
+                fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",marginBottom:"0.4rem",outline:"none",boxSizing:"border-box"}}),
+              h("div",{style:{maxHeight:200,overflowY:"auto"}},
+                ALL_CURRENCIES.filter(function(c){
+                  var q=(currSearch[0]||"").toLowerCase();
+                  return !q||c.n.toLowerCase().includes(q)||c.c.toLowerCase().includes(q);
+                }).slice(0,50).map(function(c){
+                  return h("div",{key:c.c,
+                    onClick:function(){customSym[1](c.s); showCurrSearch[1](false); currSearch[1]("");},
+                    style:{padding:"0.35rem 0.5rem",borderRadius:6,cursor:"pointer",fontSize:"0.74rem",
+                    fontFamily:"'DM Sans',sans-serif",display:"flex",justifyContent:"space-between",alignItems:"center",
+                    background:"transparent"},
+                    onMouseOver:function(e){e.currentTarget.style.background="#f0faf4";},
+                    onMouseOut:function(e){e.currentTarget.style.background="transparent";}},
+                    h("span",{style:{color:"#1a3d2b"}},h("strong",null,c.c),"\u00a0\u2014\u00a0"+c.n),
+                    h("span",{style:{fontWeight:700,color:"#1a5c35",marginLeft:6}},c.s)
+                  );
+                })
+              ),
+              h("div",{style:{borderTop:"1px solid #e8f3ec",marginTop:"0.4rem",paddingTop:"0.4rem",fontSize:"0.68rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}},
+                ALL_CURRENCIES.length+" currencies"
+              )
+            )
+          ),
+          h("div",{style:{position:"relative"}},
+            h("select",{value:countryKey[0],onChange:function(e){countryKey[1](e.target.value);},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+              Object.keys(GRID_EF).map(function(k){return h("option",{key:k,value:k},GRID_EF[k].name);})),
+            h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"▾")
           ),
           h("div",{style:{marginLeft:"auto",background:"#f0faf4",borderRadius:99,padding:"0.25rem",display:"flex",gap:2}},
             tabBtn("inputs","\u2699 Inputs"),
@@ -290,9 +524,51 @@
                 INVESTMENT_TYPES.map(function(t,i){
                   return h("button",{key:i,onClick:function(){invType[1](i); if(typeof gtag!=="undefined") gtag("event","select_investment_type",{investment_type:INVESTMENT_TYPES[i].label});},style:{padding:"0.65rem 0.9rem",borderRadius:12,border:invType[0]===i?"2px solid #2d7a4f":"1.5px solid #d4e9dc",background:invType[0]===i?"#f0faf4":"#fff",color:invType[0]===i?"#1a5c35":"#4a7a5a",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:invType[0]===i?700:500,cursor:"pointer",textAlign:"left"}},
                     t.label,
-                    h("div",{style:{fontSize:"0.65rem",color:"#8aab97",marginTop:2}},t.co2Rate+" kg CO\u2082/"+sym+"/yr")
+                    h("div",{style:{fontSize:"0.65rem",color:"#8aab97",marginTop:2}},i===INVESTMENT_TYPES.length-1?"User defined":t.actLabel)
                   );
                 })
+              ),
+              !isCustom && h("div",{style:{marginTop:"0.8rem",padding:"0.75rem 1rem",background:"#f0faf4",borderRadius:10,fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif",display:"grid",gap:"0.3rem"}},
+                h("div",null,"\ud83d\udcda Source: ",
+                  it.sourceUrl ? h("a",{href:it.sourceUrl,target:"_blank",style:{color:"#1a5c35",fontWeight:700}},it.source) : h("strong",null,it.source||"")
+                ),
+                h("div",null,"\ud83c\udf0d EF ("+gridRow.name+"): ",
+                  h("strong",{style:{color:"#1a5c35"}},
+                    itBase.efField==="grid" ? gridRow.ef+" kg CO\u2082/kWh (IEA 2023)"
+                    : effectiveEf+" kg CO\u2082/unit"
+                  )
+                ),
+                h("div",null,"\ud83d\udcb0 Carbon price ("+gridRow.name+"): ",h("strong",{style:{color:"#1a5c35"}},sym+BASE_CARBON+"/t CO\u2082")," \u00b7 ",carbonEsc[0],"% escalation/yr"),
+                h("div",null,"\u26a1 "+it.actLabel+" \u00b7 "+it.hint)
+              ),
+              isCustom && h("div",{style:{marginTop:"1rem",padding:"1rem",background:"#f0faf4",borderRadius:12,border:"1.5px solid #c4dece"}},
+                h("p",{style:{margin:"0 0 0.8rem",fontSize:"0.78rem",fontWeight:700,color:"#1a3d2b",fontFamily:"'DM Sans',sans-serif"}},"\u2699\ufe0f Custom Emission Factors"),
+                h("div",{style:{display:"grid",gap:"0.6rem"}},
+                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
+                    "Emission Factor (kg CO\u2082/unit): ",
+                    h("input",{type:"number",step:"0.001",min:"0.001",max:"5000",value:customEf[0],
+                      onChange:function(e){customEf[1](parseFloat(e.target.value)||0.5);},
+                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
+                  ),
+                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
+                    "Activity per 1000 "+sym+"/yr: ",
+                    h("input",{type:"number",step:"0.01",min:"0.001",max:"100000",value:customActUnit[0],
+                      onChange:function(e){customActUnit[1](parseFloat(e.target.value)||1.0);},
+                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
+                  ),
+                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
+                    "Asset Lifetime (years): ",
+                    h("input",{type:"number",step:"1",min:"1",max:"50",value:customLife[0],
+                      onChange:function(e){customLife[1](parseInt(e.target.value)||20);},
+                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
+                  ),
+                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
+                    "Carbon Abatement (%): ",
+                    h("input",{type:"number",step:"1",min:"1",max:"100",value:customAbatement[0],
+                      onChange:function(e){customAbatement[1](parseInt(e.target.value)||40);},
+                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
+                  )
+                )
               )
             ),
 
@@ -312,17 +588,17 @@
           tab[0]==="results" && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
 
             h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:"0.8rem"}},
-              h(KPI,{label:"Enhanced ROI",value:enhROI.toFixed(1)+"%",sub:"With 3% escalation",accent:true,big:true}),
+              h(KPI,{label:"Enhanced ROI",value:enhROI.toFixed(1)+"%",sub:"With "+escalation[0]+"% escalation",accent:true,big:true}),
               h(KPI,{label:"Basic ROI",value:basicROI.toFixed(1)+"%",sub:"No escalation"}),
               h(KPI,{label:"Net Present Value",value:fmt(npv,sym),sub:horizon[0]+"-yr net value"}),
               h(KPI,{label:"Payback Period",value:payback?payback.toFixed(1)+" yrs":"Beyond horizon",sub:"Years to break even"}),
-              h(KPI,{label:"Carbon Tax Savings",value:fmt(ctSave,sym),sub:co2s.toFixed(0)+" t CO\u2082 saved"}),
+              h(KPI,{label:"Carbon Tax Savings",value:fmt(ctSave,sym),sub:co2sPerYr.toFixed(1)+" t CO\u2082/yr \u00b7 "+sym+BASE_CARBON+"/t"}),
               h(KPI,{label:"Annual Value",value:fmt(benefit,sym),sub:"Year 1 total benefit"})
             ),
 
             h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
               h("h2",{style:{margin:"0 0 0.3rem",fontSize:"1rem",fontWeight:800}},"ROI Timeline"),
-              h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Cumulative return over "+horizon[0]+" years \u00b7 WACC "+wacc[0]+"% \u00b7 3% annual escalation"),
+              h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Cumulative return over "+horizon[0]+" years \u00b7 WACC "+wacc[0]+"% \u00b7 "+escalation[0]+"% escalation"),
               h(Chart,{data:yearly,sym:sym,inaction:showInaction[0]?inaction:null})
             ),
 
@@ -341,7 +617,7 @@
                 [
                   {l:"Total Opportunity Loss",v:fmt(totalLoss,sym),s:"Over "+horizon[0]+" years (discounted)"},
                   {l:"Avg Annual Loss",v:fmt(totalLoss/horizon[0],sym),s:"Per year of delay"},
-                  {l:"Carbon Regulatory Risk",v:fmt(co2s*BASE_CARBON*horizon[0]*(1+CARBON_ESC*horizon[0]/2),sym),s:"Escalating carbon taxes"},
+                  {l:"Carbon Regulatory Risk",v:fmt(co2s*BASE_CARBON*horizon[0]*(1+carbonEsc[0]/100*horizon[0]/2),sym),s:"Escalating carbon taxes"},
                   {l:"Extra Breakeven Delay",v:"+"+(horizon[0]*0.3).toFixed(1)+" yrs",s:"If you act later"}
                 ].map(function(item){
                   return h("div",{key:item.l,style:{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"0.9rem 1rem"}},
@@ -404,7 +680,7 @@
         ),
 
         h("div",{style:{textAlign:"center",padding:"1.5rem",borderTop:"1px solid #d4e9dc",fontSize:"0.7rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},
-          "Sustainability ROI Calculator \u00b7 DCF-adjusted NPV methodology \u00b7 "+new Date().getFullYear()
+          "Sustainability ROI Calculator v3.0 \u00b7 Activity-based EF model \u00b7 IEA \u00b7 GHG Protocol \u00b7 IPCC AR6 \u00b7 "+new Date().getFullYear()
         )
       );
     }
