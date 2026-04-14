@@ -70,21 +70,21 @@
     // ── Grid Emission Factors (kg CO2e/kWh) — IEA Emission Factors 2023 ──
     // Source: https://www.iea.org/data-and-statistics/data-product/emissions-factors-2023
     var GRID_EF = {
-      "IN":  { name: "India",         ef: 0.82, currency: "INR (₹)", sym: "₹",  source: "IEA 2023", carbonPrice: 2 },
-      "US":  { name: "USA",           ef: 0.38, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 15 },
-      "EU":  { name: "EU (avg)",      ef: 0.27, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 65 },
-      "GB":  { name: "UK",            ef: 0.21, currency: "GBP (£)", sym: "£", source: "IEA 2023", carbonPrice: 45 },
-      "AE":  { name: "UAE",           ef: 0.45, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 0 },
-      "CN":  { name: "China",         ef: 0.61, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 8 },
-      "JP":  { name: "Japan",         ef: 0.47, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 3 },
-      "AU":  { name: "Australia",     ef: 0.51, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 20 },
-      "BR":  { name: "Brazil",        ef: 0.10, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 4 },
-      "ZA":  { name: "South Africa",  ef: 0.90, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 10 },
+      "IN":  { name: "India",         ef: 0.82, currency: "INR (₹)", sym: "₹",  source: "IEA 2023", carbonPrice: 2,  wacc: 10 },
+      "US":  { name: "USA",           ef: 0.38, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 15, wacc: 8 },
+      "EU":  { name: "EU (avg)",      ef: 0.27, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 65, wacc: 6 },
+      "GB":  { name: "UK",            ef: 0.21, currency: "GBP (£)", sym: "£", source: "IEA 2023", carbonPrice: 45, wacc: 7 },
+      "AE":  { name: "UAE",           ef: 0.45, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 0,  wacc: 9 },
+      "CN":  { name: "China",         ef: 0.61, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 8,  wacc: 10 },
+      "JP":  { name: "Japan",         ef: 0.47, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 3,  wacc: 5 },
+      "AU":  { name: "Australia",     ef: 0.51, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 20, wacc: 8 },
+      "BR":  { name: "Brazil",        ef: 0.10, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 4,  wacc: 14 },
+      "ZA":  { name: "South Africa",  ef: 0.90, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 10, wacc: 14 },
       "DE":  { name: "Germany",       ef: 0.28, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 65 },
       "FR":  { name: "France",        ef: 0.06, currency: "EUR (€)", sym: "€", source: "IEA 2023", carbonPrice: 45 },
-      "CA":  { name: "Canada",        ef: 0.13, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 50 },
-      "SG":  { name: "Singapore",     ef: 0.41, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 25 },
-      "CUSTOM": { name: "Custom",     ef: 0.50, currency: "USD ($)",     sym: "$",   source: "User defined", carbonPrice: 50 }
+      "CA":  { name: "Canada",        ef: 0.13, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 50, wacc: 7 },
+      "SG":  { name: "Singapore",     ef: 0.41, currency: "USD ($)",     sym: "$",   source: "IEA 2023", carbonPrice: 25, wacc: 7 },
+      "CUSTOM": { name: "Custom",     ef: 0.50, currency: "USD ($)",     sym: "$",   source: "User defined", carbonPrice: 50, wacc: 8 }
     };
 
     // ── Investment Types — activity-based EF model (GHG Protocol / IEA / IPCC AR6) ──
@@ -367,9 +367,16 @@
       var currSearch = s(""), showCurrSearch = s(false), customSym = s(null);
       var customEf = s(0.50), customActUnit = s(1.0), customLife = s(20), customAbatement = s(40);
       var escalation = s(3), carbonEsc = s(5);
+      var wizardStep = s(1);
 
       var gridRow = GRID_EF[countryKey[0]] || GRID_EF["CUSTOM"];
       var BASE_CARBON = gridRow.carbonPrice;
+
+      function applyCountryDefaults(key) {
+        var row = GRID_EF[key] || GRID_EF["CUSTOM"];
+        countryKey[1](key);
+        wacc[1](row.wacc || 8);
+      }
       var sym = customSym[0] !== null ? customSym[0] : CURRENCIES[currency[0]].symbol;
       var isCustom = invType[0] === INVESTMENT_TYPES.length - 1;
       var itBase = INVESTMENT_TYPES[invType[0]];
@@ -451,168 +458,249 @@
           )
         ),
 
-        // CONTROLS
-        h("div",{className:"no-print",style:{background:"#fff",borderBottom:"1.5px solid #d4e9dc",padding:"0.8rem 1.5rem",display:"flex",gap:"0.7rem",flexWrap:"wrap",alignItems:"center",justifyContent:"center"}},
+        // WIZARD PROGRESS BAR
+        h("div",{className:"no-print",style:{background:"#fff",borderBottom:"1.5px solid #d4e9dc",padding:"0.9rem 1.5rem"}},
+          h("div",{style:{display:"flex",justifyContent:"center",gap:0,maxWidth:560,margin:"0 auto",position:"relative"}},
+            h("div",{style:{position:"absolute",top:"18px",left:"12%",right:"12%",height:2,background:"#d4e9dc",zIndex:0}}),
+            [{n:1,label:"Where?",icon:"\uD83C\uDF0D"},{n:2,label:"What?",icon:"\uD83C\uDF31"},{n:3,label:"Refine",icon:"\uD83D\uDCCA"},{n:4,label:"Results",icon:"\u2728"}].map(function(step){
+              var active=wizardStep[0]===step.n, done=wizardStep[0]>step.n;
+              return h("div",{key:step.n,onClick:function(){if(done||active)wizardStep[1](step.n);},
+                style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flex:1,cursor:(done||active)?"pointer":"default",zIndex:1}},
+                h("div",{style:{width:36,height:36,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                  background:active?"#1a5c35":done?"#6aab7f":"#e8f5ee",
+                  border:active?"2.5px solid #0f3d22":done?"2px solid #4a9a63":"1.5px solid #c4dece",
+                  fontSize:done?"1rem":"1.1rem",fontWeight:700,color:active||done?"#fff":"#8aab97",
+                  boxShadow:active?"0 2px 10px rgba(26,92,53,0.35)":"none",transition:"all 0.2s"}},
+                  done?"\u2713":step.icon
+                ),
+                h("span",{style:{fontSize:"0.62rem",fontWeight:active?700:500,
+                  color:active?"#1a5c35":done?"#4a9a63":"#8aab97",
+                  fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}},step.label)
+              );
+            })
+          )
+        ),
+        wizardStep[0]===4 && h("div",{className:"no-print",style:{background:"#f5fdf7",borderBottom:"1px solid #d4e9dc",padding:"0.5rem 1.5rem",display:"flex",gap:"0.7rem",flexWrap:"wrap",alignItems:"center",justifyContent:"center",fontSize:"0.78rem"}},
+          h("span",{style:{fontSize:"0.68rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Advanced:"),
           sel(horizon[0],horizon[1],HORIZONS," Yrs"),
           sel(wacc[0],wacc[1],WACCS,"%"),
           sel(escalation[0],escalation[1],[1,2,3,4,5,6,7,8],"%esc"),
           h("div",{style:{position:"relative"}},
             h("select",{value:carbonEsc[0],onChange:function(e){carbonEsc[1](Number(e.target.value));},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
-              [3,5,7,10,15].map(function(v){return h("option",{key:v,value:v},v+"% CO₂ esc");})),
-            h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"▾")
-          ),
-          h("div",{style:{position:"relative"}},
-            h("select",{value:currency[0],onChange:function(e){currency[1](Number(e.target.value)); customSym[1](null);},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
-              CURRENCIES.map(function(c,i){return h("option",{key:i,value:i},c.label);})),
+              [3,5,7,10,15].map(function(v){return h("option",{key:v,value:v},v+"% CO\u2082 esc");})),
             h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"\u25be")
           ),
-          h("div",{style:{position:"relative"}},
-            h("button",{onClick:function(){showCurrSearch[1](function(v){return !v;}); currSearch[1]("");},
-              style:{padding:"0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",
-              background:customSym[0]?"#1a5c35":"#f5fdf7",color:customSym[0]?"#fff":"#1a5c35",
-              fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},
-              customSym[0] ? "\u2713 "+customSym[0] : "\uD83D\uDD0D Other"
-            ),
-            showCurrSearch[0] && h("div",{style:{position:"absolute",top:"110%",left:0,zIndex:999,background:"#fff",
-              borderRadius:12,border:"1.5px solid #c4dece",boxShadow:"0 8px 24px rgba(0,0,0,0.12)",width:240,padding:"0.6rem"}},
-              h("input",{autoFocus:true,placeholder:"Search currency or code...",value:currSearch[0],
-                onChange:function(e){currSearch[1](e.target.value);},
-                style:{width:"100%",padding:"0.4rem 0.6rem",borderRadius:8,border:"1.5px solid #c4dece",
-                fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",marginBottom:"0.4rem",outline:"none",boxSizing:"border-box"}}),
-              h("div",{style:{maxHeight:200,overflowY:"auto"}},
-                ALL_CURRENCIES.filter(function(c){
-                  var q=(currSearch[0]||"").toLowerCase();
-                  return !q||c.n.toLowerCase().includes(q)||c.c.toLowerCase().includes(q);
-                }).slice(0,50).map(function(c){
-                  return h("div",{key:c.c,
-                    onClick:function(){customSym[1](c.s); showCurrSearch[1](false); currSearch[1]("");},
-                    style:{padding:"0.35rem 0.5rem",borderRadius:6,cursor:"pointer",fontSize:"0.74rem",
-                    fontFamily:"'DM Sans',sans-serif",display:"flex",justifyContent:"space-between",alignItems:"center",
-                    background:"transparent"},
-                    onMouseOver:function(e){e.currentTarget.style.background="#f0faf4";},
-                    onMouseOut:function(e){e.currentTarget.style.background="transparent";}},
-                    h("span",{style:{color:"#1a3d2b"}},h("strong",null,c.c),"\u00a0\u2014\u00a0"+c.n),
-                    h("span",{style:{fontWeight:700,color:"#1a5c35",marginLeft:6}},c.s)
-                  );
-                })
-              ),
-              h("div",{style:{borderTop:"1px solid #e8f3ec",marginTop:"0.4rem",paddingTop:"0.4rem",fontSize:"0.68rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}},
-                ALL_CURRENCIES.length+" currencies"
-              )
-            )
-          ),
-          h("div",{style:{position:"relative"}},
-            h("select",{value:countryKey[0],onChange:function(e){countryKey[1](e.target.value);},style:{padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
-              Object.keys(GRID_EF).map(function(k){return h("option",{key:k,value:k},GRID_EF[k].name);})),
-            h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"▾")
-          ),
-          h("div",{style:{marginLeft:"auto",background:"#f0faf4",borderRadius:99,padding:"0.25rem",display:"flex",gap:2}},
-            tabBtn("inputs","\u2699 Inputs"),
-            tabBtn("results","\uD83D\uDCCA Results")
-          )
+          h("button",{onClick:function(){wizardStep[1](1);},style:{marginLeft:"auto",padding:"0.3rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",background:"transparent",color:"#6aab97",fontFamily:"'DM Sans',sans-serif",fontSize:"0.72rem",fontWeight:700,cursor:"pointer"}},"\u21BA Start Over")
         ),
 
-        // MAIN
+
+        // MAIN — WIZARD
         h("div",{style:{maxWidth:920,margin:"0 auto",padding:"1.5rem 1rem 3rem"}},
 
-          // --- INPUTS ---
-          tab[0]==="inputs" && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
-
+          // ── STEP 1: WHERE ARE YOU? ──
+          wizardStep[0]===1 && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem",maxWidth:620,margin:"0 auto"}},
+            h("div",{style:{textAlign:"center",padding:"0.5rem 0"}},
+              h("div",{style:{fontSize:"2.5rem"}}),
+              h("h2",{style:{fontSize:"1.2rem",fontWeight:800,margin:"0 0 0.3rem",color:"#1a3d2b"}},"Step 1: Where are you located?"),
+              h("p",{style:{fontSize:"0.85rem",color:"#6aab97",fontFamily:"'DM Sans',sans-serif",margin:0}},"We\u2019ll auto-set your carbon price, grid factor, and cost of funding.")
+            ),
             h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
-              h("h2",{style:{margin:"0 0 1rem",fontSize:"1rem",fontWeight:800}},"Investment Type"),
-              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(175px,1fr))",gap:"0.6rem"}},
-                INVESTMENT_TYPES.map(function(t,i){
-                  return h("button",{key:i,onClick:function(){invType[1](i); if(typeof gtag!=="undefined") gtag("event","select_investment_type",{investment_type:INVESTMENT_TYPES[i].label});},style:{padding:"0.65rem 0.9rem",borderRadius:12,border:invType[0]===i?"2px solid #2d7a4f":"1.5px solid #d4e9dc",background:invType[0]===i?"#f0faf4":"#fff",color:invType[0]===i?"#1a5c35":"#4a7a5a",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:invType[0]===i?700:500,cursor:"pointer",textAlign:"left"}},
-                    t.label,
-                    h("div",{style:{fontSize:"0.65rem",color:"#8aab97",marginTop:2}},i===INVESTMENT_TYPES.length-1?"User defined":t.actLabel)
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:"0.6rem"}},
+                Object.keys(GRID_EF).filter(function(k){return k!=="CUSTOM";}).map(function(k){
+                  var row=GRID_EF[k], sel=countryKey[0]===k;
+                  var flags={"IN":"\uD83C\uDDEE\uD83C\uDDF3","US":"\uD83C\uDDFA\uD83C\uDDF8","EU":"\uD83C\uDDEA\uD83C\uDDFA","GB":"\uD83C\uDDEC\uD83C\uDDE7","AE":"\uD83C\uDDE6\uD83C\uDDEA","CN":"\uD83C\uDDE8\uD83C\uDDF3","JP":"\uD83C\uDDEF\uD83C\uDDF5","AU":"\uD83C\uDDE6\uD83C\uDDFA","BR":"\uD83C\uDDE7\uD83C\uDDF7","ZA":"\uD83C\uDDFF\uD83C\uDDE6","DE":"\uD83C\uDDE9\uD83C\uDDEA","FR":"\uD83C\uDDEB\uD83C\uDDF7","CA":"\uD83C\uDDE8\uD83C\uDDE6","SG":"\uD83C\uDDF8\uD83C\uDDEC"};
+                  return h("button",{key:k,onClick:function(){applyCountryDefaults(k);},
+                    style:{padding:"0.8rem 0.7rem",borderRadius:14,border:sel?"2px solid #2d7a4f":"1.5px solid #d4e9dc",
+                    background:sel?"#f0faf4":"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}},
+                    h("div",{style:{fontSize:"1.1rem",marginBottom:3}},(flags[k]||"\uD83C\uDF0D")),
+                    h("div",{style:{fontWeight:700,fontSize:"0.8rem",color:sel?"#1a5c35":"#1a3d2b",fontFamily:"'DM Sans',sans-serif"}}),
+                    h("div",{style:{fontWeight:700,fontSize:"0.8rem",color:sel?"#1a5c35":"#1a3d2b",fontFamily:"'DM Sans',sans-serif"}},row.name),
+                    h("div",{style:{fontSize:"0.62rem",color:"#8aab97",marginTop:2,fontFamily:"'DM Sans',sans-serif"}},
+                      "WACC "+row.wacc+"% \u00b7 "+row.sym+(row.carbonPrice||0)+"/t CO\u2082")
                   );
                 })
               ),
-              !isCustom && h("div",{style:{marginTop:"0.8rem",padding:"0.75rem 1rem",background:"#f0faf4",borderRadius:10,fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif",display:"grid",gap:"0.3rem"}},
-                h("div",null,"\ud83d\udcda Source: ",
-                  it.sourceUrl ? h("a",{href:it.sourceUrl,target:"_blank",style:{color:"#1a5c35",fontWeight:700}},it.source) : h("strong",null,it.source||"")
+              h("div",{style:{marginTop:"1rem",paddingTop:"1rem",borderTop:"1px solid #edf7f1",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}},
+                h("span",{style:{fontSize:"0.75rem",color:"#6aab97",fontFamily:"'DM Sans',sans-serif"}},"Currency:"),
+                h("div",{style:{position:"relative",flex:1,minWidth:130}},
+                  h("select",{value:currency[0],onChange:function(e){currency[1](Number(e.target.value)); customSym[1](null);},
+                    style:{width:"100%",padding:"0.4rem 2rem 0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",
+                    background:"#f5fdf7",fontFamily:"'DM Sans',sans-serif",fontSize:"0.8rem",fontWeight:700,color:"#1a5c35",cursor:"pointer"}},
+                    CURRENCIES.map(function(c,i){return h("option",{key:i,value:i},c.label);})),
+                  h("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#6aab7f",fontSize:"0.7rem"}},"\u25be")
                 ),
-                h("div",null,"\ud83c\udf0d EF ("+gridRow.name+"): ",
-                  h("strong",{style:{color:"#1a5c35"}},
-                    itBase.efField==="grid" ? gridRow.ef+" kg CO\u2082/kWh (IEA 2023)"
-                    : effectiveEf+" kg CO\u2082/unit"
-                  )
-                ),
-                h("div",null,"\ud83d\udcb0 Carbon price ("+gridRow.name+"): ",h("strong",{style:{color:"#1a5c35"}},sym+BASE_CARBON+"/t CO\u2082")," \u00b7 ",carbonEsc[0],"% escalation/yr"),
-                h("div",null,"\u26a1 "+it.actLabel+" \u00b7 "+it.hint)
-              ),
-              isCustom && h("div",{style:{marginTop:"1rem",padding:"1rem",background:"#f0faf4",borderRadius:12,border:"1.5px solid #c4dece"}},
-                h("p",{style:{margin:"0 0 0.8rem",fontSize:"0.78rem",fontWeight:700,color:"#1a3d2b",fontFamily:"'DM Sans',sans-serif"}},"\u2699\ufe0f Custom Emission Factors"),
-                h("div",{style:{display:"grid",gap:"0.6rem"}},
-                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
-                    "Emission Factor (kg CO\u2082/unit): ",
-                    h("input",{type:"number",step:"0.001",min:"0.001",max:"5000",value:customEf[0],
-                      onChange:function(e){customEf[1](parseFloat(e.target.value)||0.5);},
-                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
-                  ),
-                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
-                    "Activity per 1000 "+sym+"/yr: ",
-                    h("input",{type:"number",step:"0.01",min:"0.001",max:"100000",value:customActUnit[0],
-                      onChange:function(e){customActUnit[1](parseFloat(e.target.value)||1.0);},
-                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
-                  ),
-                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
-                    "Asset Lifetime (years): ",
-                    h("input",{type:"number",step:"1",min:"1",max:"50",value:customLife[0],
-                      onChange:function(e){customLife[1](parseInt(e.target.value)||20);},
-                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
-                  ),
-                  h("label",{style:{fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif"}},
-                    "Carbon Abatement (%): ",
-                    h("input",{type:"number",step:"1",min:"1",max:"100",value:customAbatement[0],
-                      onChange:function(e){customAbatement[1](parseInt(e.target.value)||40);},
-                      style:{marginLeft:6,padding:"0.25rem 0.5rem",borderRadius:6,border:"1.5px solid #c4dece",fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",width:90}})
+                h("button",{onClick:function(){showCurrSearch[1](function(v){return !v;}); currSearch[1]("");},
+                  style:{padding:"0.4rem 0.8rem",borderRadius:99,border:"1.5px solid #c4dece",
+                  background:customSym[0]?"#1a5c35":"#f5fdf7",color:customSym[0]?"#fff":"#1a5c35",
+                  fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",fontWeight:700,cursor:"pointer"}},
+                  customSym[0]?"\u2713 "+customSym[0]:"\uD83D\uDD0D Other"),
+                showCurrSearch[0] && h("div",{style:{position:"absolute",zIndex:999,background:"#fff",borderRadius:12,
+                  border:"1.5px solid #c4dece",boxShadow:"0 8px 24px rgba(0,0,0,0.12)",width:240,padding:"0.6rem",marginTop:4}},
+                  h("input",{autoFocus:true,placeholder:"Search currency...",value:currSearch[0],onChange:function(e){currSearch[1](e.target.value);},
+                    style:{width:"100%",padding:"0.4rem 0.6rem",borderRadius:8,border:"1.5px solid #c4dece",
+                    fontFamily:"'DM Sans',sans-serif",fontSize:"0.78rem",marginBottom:"0.4rem",outline:"none",boxSizing:"border-box"}}),
+                  h("div",{style:{maxHeight:180,overflowY:"auto"}},
+                    ALL_CURRENCIES.filter(function(c){var q=(currSearch[0]||"").toLowerCase(); return !q||c.n.toLowerCase().includes(q)||c.c.toLowerCase().includes(q);}).slice(0,40).map(function(c){
+                      return h("div",{key:c.c,onClick:function(){customSym[1](c.s); showCurrSearch[1](false); currSearch[1]("");},
+                        style:{padding:"0.3rem 0.5rem",borderRadius:6,cursor:"pointer",fontSize:"0.74rem",fontFamily:"'DM Sans',sans-serif",display:"flex",justifyContent:"space-between"},
+                        onMouseOver:function(e){e.currentTarget.style.background="#f0faf4";},onMouseOut:function(e){e.currentTarget.style.background="transparent";}},
+                        h("span",null,h("strong",null,c.c),"\u00a0\u2014\u00a0"+c.n),h("span",{style:{fontWeight:700,color:"#1a5c35"}},c.s));
+                    })
                   )
                 )
               )
             ),
-
-            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
-              h("h2",{style:{margin:"0 0 1.2rem",fontSize:"1rem",fontWeight:800}},"Financial Inputs"),
-              h(SliderInput,{label:"Investment Cost",value:cost[0],min:50000,max:10000000,step:50000,onChange:cost[1],sym:sym,info:"Total upfront capital expenditure"}),
-              h(SliderInput,{label:"Annual Cost Savings (Yr 1)",value:savings[0],min:0,max:500000,step:5000,onChange:savings[1],sym:sym,info:"Energy, operational, material savings",color:"#1a8c50"}),
-              h(SliderInput,{label:"Annual Risk Avoidance (Yr 1)",value:riskAvoid[0],min:0,max:200000,step:2500,onChange:riskAvoid[1],sym:sym,info:"Avoided fines, penalties, insurance",color:"#2a9d6f"}),
-              h(SliderInput,{label:"Annual Revenue Growth (Yr 1)",value:revGrowth[0],min:0,max:200000,step:2500,onChange:revGrowth[1],sym:sym,info:"Revenue from green credentials",color:"#3ab080"}),
-              h(SliderInput,{label:"Financing Benefit (Yr 1)",value:finBonus[0],min:0,max:100000,step:2500,onChange:finBonus[1],sym:sym,info:"Lower cost of capital from green loans",color:"#4abf8a"})
-            ),
-
-            h("button",{onClick:function(){tab[1]("results"); if(typeof gtag!=="undefined") gtag("event","calculate_roi",{investment_cost:cost[0],annual_benefit:benefit,horizon_years:horizon[0],wacc:wacc[0]});},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"1rem 2rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",boxShadow:"0 4px 20px rgba(29,92,53,0.3)"}},"Calculate ROI \u2192")
+            h("button",{onClick:function(){wizardStep[1](2);},
+              style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,
+              padding:"1rem 2rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",
+              boxShadow:"0 4px 20px rgba(29,92,53,0.3)",textAlign:"center"}},
+              "Next: Choose Your Investment \u2192")
           ),
 
-          // --- RESULTS ---
-          tab[0]==="results" && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
+          // ── STEP 2: WHAT ARE YOU DOING? ──
+          wizardStep[0]===2 && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem",maxWidth:720,margin:"0 auto"}},
+            h("div",{style:{textAlign:"center",padding:"0.5rem 0"}},
+              h("h2",{style:{fontSize:"1.2rem",fontWeight:800,margin:"0 0 0.3rem",color:"#1a3d2b"}},"Step 2: What are you investing in?"),
+              h("p",{style:{fontSize:"0.85rem",color:"#6aab97",fontFamily:"'DM Sans',sans-serif",margin:0}},"Pick the closest match \u2014 we\u2019ll use verified emission factors for "+gridRow.name+".")
+            ),
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:"0.6rem"}},
+                INVESTMENT_TYPES.map(function(t,i){
+                  var sel2=invType[0]===i;
+                  var icons=["☀️","⚡","🚗","♻️","🏢","💧","🌳","🔥","🏭","✏️"];
+                  return h("button",{key:i,onClick:function(){invType[1](i); if(typeof gtag!=="undefined") gtag("event","select_investment_type",{investment_type:t.label});},
+                    style:{padding:"0.9rem 0.8rem",borderRadius:14,border:sel2?"2px solid #2d7a4f":"1.5px solid #d4e9dc",
+                    background:sel2?"#f0faf4":"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}},
+                    h("div",{style:{fontSize:"1.3rem",marginBottom:4}},icons[i]||"🌱"),
+                    h("div",{style:{fontWeight:700,fontSize:"0.8rem",color:sel2?"#1a5c35":"#1a3d2b",fontFamily:"'DM Sans',sans-serif",lineHeight:1.3}},t.label),
+                    i<INVESTMENT_TYPES.length-1 && h("div",{style:{fontSize:"0.62rem",color:"#8aab97",marginTop:3,fontFamily:"'DM Sans',sans-serif"}},t.actLabel)
+                  );
+                })
+              ),
+              !isCustom && h("div",{style:{marginTop:"0.8rem",padding:"0.7rem 1rem",background:"#f0faf4",borderRadius:10,fontSize:"0.72rem",color:"#4a7a5a",fontFamily:"'DM Sans',sans-serif",display:"grid",gap:"0.25rem"}},
+                h("div",null,"\uD83D\uDCDA Source: ",h("a",{href:itBase.sourceUrl,target:"_blank",style:{color:"#1a5c35",fontWeight:700}},itBase.source)),
+                h("div",null,"\uD83C\uDF0D Grid EF ("+gridRow.name+"): ",h("strong",{style:{color:"#1a5c35"}},itBase.efField==="grid"?gridRow.ef+" kg CO\u2082/kWh (IEA 2023)":effectiveEf+" kg CO\u2082/unit")),
+                h("div",null,"\uD83D\uDCB0 Carbon price: ",h("strong",{style:{color:"#1a5c35"}},sym+BASE_CARBON+"/t CO\u2082")," \u00b7 "+carbonEsc[0]+"% escalation/yr")
+              )
+            ),
+            h("div",{style:{display:"flex",gap:"0.8rem"}},
+              h("button",{onClick:function(){wizardStep[1](1);},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1}},"\u2190 Back"),
+              h("button",{onClick:function(){wizardStep[1](3);},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",flex:2,boxShadow:"0 4px 16px rgba(29,92,53,0.25)"}},"Next: Refine Numbers \u2192")
+            )
+          ),
 
+          // ── STEP 3: REFINE NUMBERS ──
+          wizardStep[0]===3 && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem",maxWidth:680,margin:"0 auto"}},
+            h("div",{style:{textAlign:"center",padding:"0.5rem 0"}},
+              h("h2",{style:{fontSize:"1.2rem",fontWeight:800,margin:"0 0 0.3rem",color:"#1a3d2b"}},"Step 3: Refine your numbers"),
+              h("p",{style:{fontSize:"0.85rem",color:"#6aab97",fontFamily:"'DM Sans',sans-serif",margin:0}},"Smart defaults for "+gridRow.name+" are already applied. Adjust if needed.")
+            ),
+            h("div",{style:{background:"#e8f8f0",borderRadius:12,padding:"0.7rem 1rem",fontSize:"0.74rem",color:"#2d6a4a",fontFamily:"'DM Sans',sans-serif",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}},
+              h("span",null,"\uD83C\uDF0D "+gridRow.name),
+              h("span",null,"\u26A1 "+gridRow.ef+" kg CO\u2082/kWh"),
+              h("span",null,"\uD83D\uDCB0 Carbon: "+sym+BASE_CARBON+"/t"),
+              h("span",null,"\uD83D\uDCC8 Cost of Funding: "+wacc[0]+"%"),
+              h("span",{style:{color:"#6aab97",fontSize:"0.65rem",marginLeft:"auto",cursor:"pointer"},onClick:function(){wizardStep[1](1);}},"\u270F Edit")
+            ),
+            h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+              h(SliderInput,{label:"Total Investment Cost \uD83D\uDCA1",value:cost[0],min:50000,max:10000000,step:50000,onChange:cost[1],sym:sym,info:"How much are you spending on this project in total?"}),
+              h(SliderInput,{label:"Annual Cost Savings",value:savings[0],min:0,max:500000,step:5000,onChange:savings[1],sym:sym,info:"Energy bills, materials or running costs you will save each year.",color:"#1a8c50"}),
+              h(SliderInput,{label:"Money Saved from Fines & Penalties",value:riskAvoid[0],min:0,max:200000,step:2500,onChange:riskAvoid[1],sym:sym,info:"Regulatory fines, carbon charges or insurance costs you will avoid per year.",color:"#2a9d6f"}),
+              h(SliderInput,{label:"Extra Revenue from Green Credentials",value:revGrowth[0],min:0,max:200000,step:2500,onChange:revGrowth[1],sym:sym,info:"New contracts or price premium you can charge because of this green investment.",color:"#3ab080"}),
+              h(SliderInput,{label:"Green Financing Savings",value:finBonus[0],min:0,max:100000,step:2500,onChange:finBonus[1],sym:sym,info:"Interest savings from a green/sustainability-linked loan at a lower rate.",color:"#4abf8a"})
+            ),
+            h("div",{style:{display:"flex",gap:"0.8rem"}},
+              h("button",{onClick:function(){wizardStep[1](2);},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1}},"\u2190 Back"),
+              h("button",{onClick:function(){wizardStep[1](4); if(typeof gtag!=="undefined") gtag("event","calculate_roi",{investment_cost:cost[0],annual_benefit:benefit,horizon_years:horizon[0],wacc:wacc[0]});},
+                style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,
+                padding:"0.8rem 1.5rem",fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"'Bitter',serif",
+                flex:2,boxShadow:"0 4px 20px rgba(29,92,53,0.3)"}},"Calculate My ROI \u2728")
+            )
+          ),
+
+          // ── STEP 4: RESULTS ──
+          wizardStep[0]===4 && h("div",{className:"fade-up",style:{display:"grid",gap:"1.2rem"}},
+
+            // TRAFFIC LIGHT SCORECARD
+            (function(){
+              var score = enhROI>50?"green":enhROI>15?"yellow":"red";
+              var scoreLabel = score==="green"?"Great Investment":score==="yellow"?"Moderate Return":"Review Carefully";
+              var scoreIcon = score==="green"?"\uD83D\uDFE2":score==="yellow"?"\uD83D\uDFE1":"\uD83D\uDD34";
+              var scoreMsg = score==="green"
+                ? "Strong financials and positive environmental impact. Build the business case."
+                : score==="yellow"
+                ? "Financially viable. Consider optimising savings or extending the horizon."
+                : "ROI is low \u2014 review costs, savings assumptions, or consider a phased approach.";
+              return h("div",{style:{background:score==="green"?"linear-gradient(135deg,#0f3d22,#1a5c35)":score==="yellow"?"linear-gradient(135deg,#4a3800,#8a6800)":"linear-gradient(135deg,#3d1515,#6b2020)",borderRadius:20,padding:"1.5rem 1.8rem",color:"#fff",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}},
+                h("div",{style:{fontSize:"3rem",lineHeight:1}},scoreIcon),
+                h("div",{style:{flex:1}},
+                  h("div",{style:{fontSize:"0.7rem",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",opacity:0.7,fontFamily:"'DM Sans',sans-serif",marginBottom:3}},"Investment Verdict"),
+                  h("div",{style:{fontSize:"1.4rem",fontWeight:800,lineHeight:1.1,marginBottom:4}},scoreLabel),
+                  h("div",{style:{fontSize:"0.82rem",opacity:0.85,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}},scoreMsg)
+                ),
+                h("div",{style:{textAlign:"right",minWidth:100}},
+                  h("div",{style:{fontSize:"2.2rem",fontWeight:800,lineHeight:1}},enhROI.toFixed(1)+"%"),
+                  h("div",{style:{fontSize:"0.7rem",opacity:0.7,fontFamily:"'DM Sans',sans-serif"}},"Enhanced ROI")
+                )
+              );
+            })(),
+
+            // KPI GRID
             h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:"0.8rem"}},
-              h(KPI,{label:"Enhanced ROI",value:enhROI.toFixed(1)+"%",sub:"With "+escalation[0]+"% escalation",accent:true,big:true}),
-              h(KPI,{label:"Basic ROI",value:basicROI.toFixed(1)+"%",sub:"No escalation"}),
-              h(KPI,{label:"Net Present Value",value:fmt(npv,sym),sub:horizon[0]+"-yr net value"}),
               h(KPI,{label:"Payback Period",value:payback?payback.toFixed(1)+" yrs":"Beyond horizon",sub:"Years to break even"}),
-              h(KPI,{label:"Carbon Tax Savings",value:fmt(ctSave,sym),sub:co2sPerYr.toFixed(1)+" t CO\u2082/yr \u00b7 "+sym+BASE_CARBON+"/t"}),
-              h(KPI,{label:"Annual Value",value:fmt(benefit,sym),sub:"Year 1 total benefit"})
+              h(KPI,{label:"Net Present Value",value:fmt(npv,sym),sub:horizon[0]+"-yr discounted"}),
+              h(KPI,{label:"Carbon Saved",value:co2sPerYr.toFixed(1)+" t/yr",sub:"CO\u2082 every year"}),
+              h(KPI,{label:"Annual Value",value:fmt(benefit,sym),sub:"Total benefit yr 1"}),
+              h(KPI,{label:"Carbon Tax Savings",value:fmt(ctSave,sym),sub:sym+BASE_CARBON+"/t \u00b7 "+gridRow.name}),
+              h(KPI,{label:"Basic ROI",value:basicROI.toFixed(1)+"%",sub:"No escalation"})
             ),
 
+            // EQUIVALENCY METRICS
+            (function(){
+              var trees = Math.round(co2s * 45);
+              var cars = Math.round(co2s / 4.6);
+              var homes = Math.round(co2s / 7.5);
+              var flights = Math.round(co2s / 0.255);
+              return h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
+                h("h2",{style:{margin:"0 0 0.3rem",fontSize:"1rem",fontWeight:800}},"What does "+co2s.toFixed(0)+" tonnes of CO\u2082 actually mean?"),
+                h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Over "+horizon[0]+" years, your investment is equivalent to:"),
+                h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:"0.7rem"}},
+                  [
+                    {icon:"\uD83C\uDF33",val:trees.toLocaleString(),label:"Trees planted",sub:"(growing for 10 yrs)"},
+                    {icon:"\uD83D\uDE97",val:cars.toLocaleString(),label:"Cars off the road",sub:"(for one year)"},
+                    {icon:"\uD83C\uDFE0",val:homes.toLocaleString(),label:"Homes powered",sub:"(annual electricity)"},
+                    {icon:"\u2708\uFE0F",val:flights.toLocaleString(),label:"Flights avoided",sub:"(London\u2013New York)"}
+                  ].map(function(item){
+                    return h("div",{key:item.label,style:{background:"#f0faf4",borderRadius:14,padding:"1rem",textAlign:"center"}},
+                      h("div",{style:{fontSize:"1.8rem",marginBottom:4}},item.icon),
+                      h("div",{style:{fontSize:"1.1rem",fontWeight:800,color:"#1a5c35"}},item.val),
+                      h("div",{style:{fontSize:"0.72rem",fontWeight:700,color:"#1a3d2b",fontFamily:"'DM Sans',sans-serif"}},item.label),
+                      h("div",{style:{fontSize:"0.62rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif",marginTop:2}},item.sub)
+                    );
+                  })
+                )
+              );
+            })(),
+
+            // CHART
             h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
               h("h2",{style:{margin:"0 0 0.3rem",fontSize:"1rem",fontWeight:800}},"ROI Timeline"),
-              h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Cumulative return over "+horizon[0]+" years \u00b7 WACC "+wacc[0]+"% \u00b7 "+escalation[0]+"% escalation"),
+              h("p",{style:{margin:"0 0 1rem",fontSize:"0.78rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},"Cumulative return over "+horizon[0]+" years \u00b7 Cost of Funding "+wacc[0]+"% \u00b7 "+escalation[0]+"% benefit escalation"),
               h(Chart,{data:yearly,sym:sym,inaction:showInaction[0]?inaction:null})
             ),
 
+            // COST OF INACTION
             h("button",{onClick:function(){showInaction[1](function(v){var next=!v; if(typeof gtag!=="undefined") gtag("event","toggle_cost_of_inaction",{visible:next}); return next;});},style:{background:showInaction[0]?"#6b2020":"#fff3f3",color:showInaction[0]?"#fff":"#8b2a2a",border:"2px solid #8b2a2a",borderRadius:14,padding:"0.85rem 1.5rem",fontSize:"0.88rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",transition:"all 0.2s"}},
-              "\u26a0\ufe0f "+(showInaction[0]?"Hide":"Show")+" Cost of Inaction",
+              "\u26A0\uFE0F "+(showInaction[0]?"Hide":"Show")+" Cost of Inaction",
               !showInaction[0] && h("span",{style:{marginLeft:"auto",fontSize:"0.75rem",color:"#c0392b",fontWeight:600}},"Est. "+fmt(totalLoss,sym)+" loss over "+horizon[0]+" yrs")
             ),
 
             showInaction[0] && h("div",{className:"fade-up",style:{background:"linear-gradient(135deg,#3d1515,#6b2020)",borderRadius:20,padding:"1.8rem",color:"#fff"}},
               h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:"1rem"}},
-                h("span",{style:{fontSize:"1.4rem"}},"\u26a0\ufe0f"),
+                h("span",{style:{fontSize:"1.4rem"}},"\u26A0\uFE0F"),
                 h("h2",{style:{margin:0,fontSize:"1.1rem",fontWeight:800,color:"#ffb3b3"}},"Cost of Inaction")
               ),
-              h("p",{style:{margin:"0 0 1.2rem",fontSize:"0.85rem",color:"#ffd5d5",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}},"If you delay or forgo this investment, here is what your organisation stands to lose over "+horizon[0]+" years."),
+              h("p",{style:{margin:"0 0 1.2rem",fontSize:"0.85rem",color:"#ffd5d5",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}},"If you delay or skip this investment, here is what your organisation stands to lose over "+horizon[0]+" years."),
               h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:"0.8rem",marginBottom:"1.2rem"}},
                 [
                   {l:"Total Opportunity Loss",v:fmt(totalLoss,sym),s:"Over "+horizon[0]+" years (discounted)"},
@@ -629,10 +717,11 @@
               ),
               h("div",{style:{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:"0.9rem 1rem",fontSize:"0.78rem",color:"#ffd5d5",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}},
                 h("strong",{style:{color:"#ffb3b3"}},"Key risks of inaction: "),
-                "Rising energy costs, escalating carbon taxes (5%/yr), ESG reputational risk, and competitive disadvantage as peers decarbonise."
+                "Rising energy costs, escalating carbon taxes ("+carbonEsc[0]+"%/yr), ESG reputational risk, and competitive disadvantage as peers decarbonise."
               )
             ),
 
+            // YEAR BY YEAR TABLE
             h("div",{style:{background:"#fff",borderRadius:20,padding:"1.5rem",border:"1.5px solid #d4e9dc"}},
               h("h2",{style:{margin:"0 0 1rem",fontSize:"1rem",fontWeight:800}},"Year-by-Year Breakdown"),
               h("div",{style:{overflowX:"auto"}},
@@ -650,35 +739,35 @@
                       h("td",{style:{padding:"0.45rem 0.8rem",fontWeight:700,color:d.c>=0?"#1a8c50":"#c0392b"}},fmt(d.c,sym)),
                       h("td",{style:{padding:"0.45rem 0.8rem"}},
                         h("span",{style:{padding:"0.15rem 0.6rem",borderRadius:99,fontSize:"0.65rem",fontWeight:700,background:d.c>=0?"#d4f0e0":"#fde8e8",color:d.c>=0?"#1a5c35":"#c0392b"}},
-                          d.c>=0?"\u2713 Positive":"\u25bc Recovering"
-                        )
-                      )
+                          d.c>=0?"\u2713 Positive":"\u25BC Recovering"))
                     );
                   }))
                 )
               )
             ),
 
+            // SUMMARY
             h("div",{style:{background:"linear-gradient(135deg,#0f3d22,#1a5c35)",borderRadius:20,padding:"1.8rem",color:"#fff"}},
               h("h2",{style:{margin:"0 0 0.8rem",fontSize:"1rem",fontWeight:800,color:"#a8dbb8",letterSpacing:"0.05em",textTransform:"uppercase"}},"Investment Summary"),
               h("p",{style:{margin:0,fontSize:"0.95rem",lineHeight:1.8,fontFamily:"'DM Sans',sans-serif",color:"#e8f8f0"}},
-                "Your ",h("strong",{style:{color:"#fff"}},fmt(cost[0],sym))," ",it.label.toLowerCase()," investment generates an estimated enhanced return of ",
-                h("strong",{style:{color:"#a8dbb8"}},enhROI.toFixed(1)+"%")," (or ",h("strong",{style:{color:"#a8dbb8"}},basicROI.toFixed(1)+"%")," basic), with a payback of ",
+                "Your ",h("strong",{style:{color:"#fff"}},fmt(cost[0],sym))," ",it.label.toLowerCase()," investment generates an enhanced return of ",
+                h("strong",{style:{color:"#a8dbb8"}},enhROI.toFixed(1)+"%"),", with a payback of ",
                 h("strong",{style:{color:"#fff"}},payback?payback.toFixed(1)+" years":"beyond the selected horizon"),". NPV is ",
-                h("strong",{style:{color:"#fff"}},fmt(npv,sym)),", creating ",h("strong",{style:{color:"#fff"}},fmt(benefit,sym))," in annual value. Saves ",
-                h("strong",{style:{color:"#a8dbb8"}},co2s.toFixed(1)+" t CO\u2082"),", yielding ",h("strong",{style:{color:"#a8dbb8"}},fmt(ctSave,sym))," in carbon benefits.",
-                showInaction[0] && [" Delaying could cost ",h("strong",{style:{color:"#ffaaaa"}},fmt(totalLoss,sym))," over "+horizon[0]+" years."]
+                h("strong",{style:{color:"#fff"}},fmt(npv,sym)),". Saves ",
+                h("strong",{style:{color:"#a8dbb8"}},co2s.toFixed(1)+" t CO\u2082")," over "+horizon[0]+" years \u2014 equivalent to planting ",
+                h("strong",{style:{color:"#a8dbb8"}},Math.round(co2s*45).toLocaleString()+" trees"),
+                ".",showInaction[0] && [" Delaying could cost ",h("strong",{style:{color:"#ffaaaa"}},fmt(totalLoss,sym))," over "+horizon[0]+" years."]
               ),
-              h("p",{style:{margin:"1rem 0 0",fontSize:"0.68rem",color:"#6aab7f",fontFamily:"'DM Sans',sans-serif",fontStyle:"italic"}},"Disclaimer: All figures are estimates and should not be considered guaranteed outcomes. Consult a financial advisor before making investment decisions.")
+              h("p",{style:{margin:"1rem 0 0",fontSize:"0.68rem",color:"#6aab7f",fontFamily:"'DM Sans',sans-serif",fontStyle:"italic"}},"Disclaimer: All figures are estimates. Consult a financial advisor before making investment decisions.")
             ),
 
+            // ACTION BUTTONS
             h("div",{className:"no-print",style:{display:"flex",gap:"0.8rem",flexWrap:"wrap"}},
-              h("button",{onClick:function(){tab[1]("inputs");},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1,minWidth:140}},"\u2190 Adjust Inputs"),
+              h("button",{onClick:function(){wizardStep[1](3);},style:{background:"transparent",color:"#2d7a4f",border:"2px solid #2d7a4f",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:1,minWidth:140}},"\u2190 Adjust Numbers"),
               h("button",{onClick:function(){if(typeof gtag!=="undefined") gtag("event","export_pdf",{investment_cost:cost[0],roi:enhROI.toFixed(1)}); window.print();},style:{background:"linear-gradient(135deg,#1a5c35,#2d7a4f)",color:"#fff",border:"none",borderRadius:14,padding:"0.8rem 1.5rem",fontSize:"0.85rem",fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flex:2,minWidth:180,boxShadow:"0 4px 16px rgba(29,92,53,0.25)"}},"\uD83D\uDDB8 Export / Print as PDF")
             )
           )
         ),
-
         h("div",{style:{textAlign:"center",padding:"1.5rem",borderTop:"1px solid #d4e9dc",fontSize:"0.7rem",color:"#8aab97",fontFamily:"'DM Sans',sans-serif"}},
           "Sustainability ROI Calculator v3.0 \u00b7 Activity-based EF model \u00b7 IEA \u00b7 GHG Protocol \u00b7 IPCC AR6 \u00b7 "+new Date().getFullYear()
         )
